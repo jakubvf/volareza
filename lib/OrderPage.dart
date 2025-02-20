@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:core';
 
 import 'package:flutter/material.dart';
+import 'AnimatedCreditLabel.dart';
 import 'ApiClient.dart';
 import 'json_parsing.dart';
 
@@ -27,6 +28,9 @@ class _OrderPageState extends State<OrderPage> {
   static int _persistentPageIndex = 0;
   late int _currentPageIndex;
 
+  double _previousCredit = 0;
+  double _currentCredit = 0;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +40,7 @@ class _OrderPageState extends State<OrderPage> {
     _currentPageIndex = _persistentPageIndex;
 
     _login = widget.login;
+    _currentCredit = double.parse(_login.credit);
 
     _fetchFacilityData();
   }
@@ -52,22 +57,34 @@ class _OrderPageState extends State<OrderPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Image.asset(
-          isDarkTheme ? 'assets/volareza-dark.png' : 'assets/volareza.png',
-          height: 40,
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Center(
-              child: Text(
-                'Credit: ${_login.credit} Kč',
-                style: Theme.of(context).textTheme.titleMedium,
+          title: Image.asset(
+            isDarkTheme ? 'assets/volareza-dark.png' : 'assets/volareza.png',
+            height: 40,
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Credit: ',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    AnimatedCreditLabel(
+                      startValue: _previousCredit,
+                      endValue: _currentCredit,
+                      suffix: ' Kč',
+                      textStyle: Theme.of(context).textTheme.titleMedium,
+                      duration: const Duration(milliseconds: 800),
+                      decimals: 2,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ]),
       drawer: _buildCalendarDrawer(),
       body: _buildContent(),
     );
@@ -111,8 +128,23 @@ class _OrderPageState extends State<OrderPage> {
     }
   }
 
+  double figureOutPriceForAMeal(Day currentDay, Meal meal) {
+    // I know this is stupid, but I don't know how to do it better
+    if (meal.code.contains("5")) {
+      return double.parse(currentDay.prices.lunch[1]['price']);
+    } else {
+      return double.parse(currentDay.prices.lunch[0]['price']);
+    }
+  }
+
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
     try {
+      setState(() {
+        _mealTapped[meal.id] = false;
+        _previousCredit = _currentCredit;
+        _currentCredit -= figureOutPriceForAMeal(currentDay, meal);
+      });
+
       await ApiClient.instance
           .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
 
@@ -121,29 +153,22 @@ class _OrderPageState extends State<OrderPage> {
     } catch (e) {
       _showErrorSnackBar(e.toString());
     }
-    finally {
-      if (mounted) {
-        setState(() {
-          _mealTapped[meal.id] = false;
-        });
-      }
-    }
   }
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
     try {
+      setState(() {
+        _mealTapped[meal.id] = false;
+        _previousCredit = _currentCredit;
+        _currentCredit += figureOutPriceForAMeal(currentDay, meal);
+      });
+
       await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
 
       if (!mounted) return;
       _refreshData(currentDay);
-    } catch (e){
+    } catch (e) {
       _showErrorSnackBar(e.toString());
-    } finally {
-      if (mounted) {
-        setState(() {
-          _mealTapped[meal.id] = false;
-        });
-      }
     }
   }
 
