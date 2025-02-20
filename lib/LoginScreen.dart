@@ -6,7 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
 import 'package:volareza/main.dart';
 import 'ApiClient.dart';
-import 'Facility.dart';
+import 'json_parsing.dart';
 
 /// Handles user login. If the login is successful, the user is redirected to the [MainScreen].
 ///
@@ -33,7 +33,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (!mounted) return;
+
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
@@ -41,36 +43,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // initialize ApiClient - a singleton handling all API requests
       ApiClient.initialize(_emailController.text, _passwordController.text);
-      // this is how you get a reference to the singleton
-      final apiClient = ApiClient();
 
-      apiClient.login((error, response) async {
+      try {
+        final loginResult = await ApiClient.instance.login(); // Call the async login method
+
         setState(() {
           _isLoading = false;
         });
 
-        if (error != null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: ${error.toString()}')));
-        } else {
-
-          // Secure storage doesn't work for me when running on desktop
-          if (!kDebugMode) {
-            // Save email and password to secure storage
-            await _storage.write(key: 'email', value: _emailController.text);
-            await _storage.write(
-                key: 'password', value: _passwordController.text);
-          }
-
-          Login login = Login.fromJson(jsonDecode(response!)['data']);
-
-          if (context.mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => MainScreen(login: login, themeNotifier: widget.themeNotifier,)),
-            );
-          }
+        // Secure storage doesn't work for me when running on desktop
+        if (!kDebugMode) {
+          // Save email and password to secure storage
+          await _storage.write(key: 'email', value: _emailController.text);
+          await _storage.write(
+              key: 'password', value: _passwordController.text);
         }
-      });
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => MainScreen(login: loginResult, themeNotifier: widget.themeNotifier,)),
+          );
+
+
+      } on ApiException catch (e) {
+        // Handle API-specific errors
+        setState(() {
+          _isLoading = false;
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Login failed: ${e.message}')));
+        }
+      } catch (e) {
+        // Handle other unexpected errors
+        setState(() {
+          _isLoading = false;
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Login failed: ${e.toString()}')));
+        }
+      }
     }
   }
 

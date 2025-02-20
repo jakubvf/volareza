@@ -1,23 +1,31 @@
+// This file contains the classes for parsing the JSON response from the API.
+
 class Facility {
   final List<CalendarItem> calendar;
   final bool calLength;
   final bool info;
+  final Day initialDay;
   final List<Eatery> eateries;
 
   Facility({
     required this.calendar,
     required this.calLength,
     required this.info,
+    required this.initialDay,
     required this.eateries,
   });
 
   factory Facility.fromJson(Map<String, dynamic> json) {
+    // response for getFacility also contains the first day
+    final calendar = (json['calender'] as List)
+        .map((item) => CalendarItem.fromJson(item))
+        .toList();
+
     return Facility(
-      calendar: (json['calender'] as List)
-          .map((item) => CalendarItem.fromJson(item))
-          .toList(),
+      calendar: calendar,
       calLength: json['calLength'],
       info: json['info'],
+      initialDay: Day.fromJson(json, calendar.first.date),
       eateries: (json['eateries'] as List)
           .map((item) => Eatery.fromJson(item))
           .toList(),
@@ -94,6 +102,7 @@ class Meal {
   final String code;
   final String name;
   final String alergens;
+  /// -1 => not available, 0 => available, 2 => ordered
   final int status;
   final int group;
 

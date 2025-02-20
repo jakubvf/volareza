@@ -2,23 +2,20 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
-typedef Callback = void Function(Exception? error, String? response);
+import 'json_parsing.dart';
 
 class ApiClient {
   final String username;
   final String password;
-  String _cookies = '';
+  final String baseUrl = 'https://unob.jidelny-vlrz.cz';
+  String? phpSessionIdCookie = '';
 
   ApiClient._internal(this.username, this.password);
 
-  static ApiClient? _instance;
+  static late ApiClient instance;
 
-  static void initialize(String username, String password) {
-    _instance = ApiClient._internal(username, password);
-  }
-
-  factory ApiClient() {
-    return _instance!;
+  static Future<void> initialize(String username, String password) async {
+    instance = ApiClient._internal(username, password);
   }
 
   static String hashPassword(String input) {
@@ -27,69 +24,82 @@ class ApiClient {
     return digest.toString();
   }
 
-  Future<void> makeRequest(
-      String path, Map<String, dynamic> data, Callback callback) async {
+  // Generic Request Method (Internal)
+  Future<dynamic> _makeRequest({
+    required String path,
+    required String req,
+    Map<String, dynamic>? data,
+    String method = 'POST',
+  }) async {
+    final uri = Uri.parse('$baseUrl$path?req=$req');
     final reqData = jsonEncode(data);
 
     try {
-      final response = await http.post(
-        Uri.parse('https://unob.jidelny-vlrz.cz$path'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (_cookies.isNotEmpty) 'Cookie': _cookies,
-        },
-        body: reqData,
-      );
+      final client = http.Client();
 
-      if (response.statusCode == 200 && !response.body.contains('error')) {
-        final setCookieHeader = response.headers['set-cookie'];
-        if (setCookieHeader != null) {
-          _cookies = setCookieHeader.split(';')[0];
-        }
-        callback(null, utf8.decode(response.bodyBytes));
-      } else {
-        callback(Exception('Request failed with status ${response.statusCode}'),
-            null);
+      final request = http.Request(method, uri);
+      request.headers['Content-Type'] = 'application/json';
+
+      if (phpSessionIdCookie != null) {
+        request.headers['Cookie'] = phpSessionIdCookie!;
       }
-    } catch (error) {
-      callback(Exception(error.toString()), null);
+
+      request.body = reqData;
+      final streamedResponse = await client.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // We basically want to save the PHPSESSIONID cookie and ignore the rest
+      final setCookieHeader = response.headers['set-cookie'];
+      if (setCookieHeader != null) {
+          phpSessionIdCookie = setCookieHeader.split(';')[0];
+      }
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        try {
+          final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+          return decodedBody;
+        } catch (e) {
+          throw ApiException('Failed to parse JSON: ${e.toString()}');
+        }
+      } else {
+        throw ApiException(
+            'Request failed', statusCode: response.statusCode);
+      }
+    } catch (e) {
+      throw ApiException('Request failed: ${e.toString()}');
     }
   }
 
-  void login(Callback callback) {
+  // API Methods
+
+  Future<Login> login() async {
     final data = {
-      'req': 'login',
       'facId': '10',
       'userNm': username,
       'userPwd': hashPassword(password),
       'lang': 'CZ',
       'remLogin': false
     };
-
-    makeRequest('/service/?req=login', data, callback);
+    final response = await _makeRequest(path: '/service/', req: 'login', data: data);
+    return Login.fromJson(response['data']);
   }
 
-  void getFacility(Callback callback) {
-    final data = {
-      'req': 'facility',
-    };
-
-    makeRequest('/service/?req=facility', data, callback);
+  Future<Facility> getFacility() async {
+    final response = await _makeRequest(path: '/service/', req: 'facility');
+    return Facility.fromJson(response['data']);
   }
 
-  void getDay(String preferredEatery, String date, Callback callback) {
+  Future<Day> getDay(String preferredEatery, String date) async {
     final data = {
-      'req': 'facility',
       'eatery': preferredEatery,
       'date': date,
     };
-
-    makeRequest('/service/?req=facility', data, callback);
+    final response = await _makeRequest(path: '/service/', req: 'facility', data: data);
+    return Day.fromJson(response['data'], date);
   }
 
-  void selectMeal(String date, String eatery, String mealType, String mealId, String menuId, Callback callback) {
+  Future<void> selectMeal(String date, String eatery, String mealType, String mealId, String menuId) async {
     final data = {
-      'req': 'mealSel',
       'mealSel': [
         {
           'mealSel': true,
@@ -101,13 +111,11 @@ class ApiClient {
         }
       ]
     };
-
-    makeRequest('/service/?req=mealSel', data, callback);
+    await _makeRequest(path: '/service/', req: 'mealSel', data: data);
   }
 
-  void order(String date, String eatery, String mealId, String menuId, Callback callback) {
+  Future<void> order(String date, String eatery, String mealId, String menuId) async {
     final data = {
-      'req': 'order',
       'date': date,
       'eatery': eatery,
       'mealTp': "O", // we only support ordering for lunch
@@ -119,18 +127,27 @@ class ApiClient {
         }
       ]
     };
-
-    makeRequest('/service/?req=order', data, callback);
+    await _makeRequest(path: '/service/', req: 'order', data: data);
   }
 
-  void cancelOrder(String date, String eatery, Callback callback) {
+  Future<void> cancelOrder(String date, String eatery) async {
     final data = {
-      'req': 'cancelOrder',
       'date': date,
       'eatery': eatery,
       'mealTp': "O", // we only support ordering for lunch
     };
+    await _makeRequest(path: '/service/', req: 'cancelOrder', data: data);
+  }
+}
 
-    makeRequest('/service/?req=cancelOrder', data, callback);
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() {
+    return 'ApiException: $message (Status Code: $statusCode)';
   }
 }

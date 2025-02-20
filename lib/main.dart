@@ -105,7 +105,8 @@ class SettingsNotifier extends ChangeNotifier {
 
   Future<void> setColorSeed(Color color) async {
     _colorSeed = color;
-    await _prefs.setInt(_colorSeedKey, color.value);
+    // TODO: using toARGB32 causes the UI to show unknown color after restart
+    await _prefs.setInt(_colorSeedKey, color.toARGB32());
     notifyListeners();
   }
 

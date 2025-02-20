@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'ApiClient.dart';
-import 'Facility.dart';
+import 'json_parsing.dart';
 import 'OrderPage.dart';
 import 'ProfilePage.dart';
 import 'SettingsPage.dart';
 import 'main.dart';
 
 class MainScreen extends StatefulWidget {
-  final ApiClient apiClient = ApiClient();
   final Login login;
   final SettingsNotifier themeNotifier;
 

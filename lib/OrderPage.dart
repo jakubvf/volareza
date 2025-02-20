@@ -3,12 +3,11 @@ import 'dart:core';
 
 import 'package:flutter/material.dart';
 import 'ApiClient.dart';
-import 'Facility.dart';
+import 'json_parsing.dart';
 
 class OrderPage extends StatefulWidget {
- OrderPage({super.key, required this.login});
+  OrderPage({super.key, required this.login});
 
-  final ApiClient apiClient = ApiClient();
   final Login login;
 
   @override
@@ -16,18 +15,15 @@ class OrderPage extends StatefulWidget {
 }
 
 class _OrderPageState extends State<OrderPage> {
-  static const _snackBarDuration = Duration(milliseconds: 900);
-
   late final Login _login;
   final Map<String, bool> _mealTapped = {};
   final Map<String, Day> _loadedDays = {};
 
   Facility? _facility;
-  bool _isLoading = true;
   String? _error;
   late PageController _pageController;
 
-  // static because we want to keep the index even when the user leaves the page (to settings/profile)
+  // static because we want to keep the index even when the user leaves to settings/profile pages
   static int _persistentPageIndex = 0;
   late int _currentPageIndex;
 
@@ -81,33 +77,17 @@ class _OrderPageState extends State<OrderPage> {
     if (!mounted) return;
 
     try {
-      setState(() => _isLoading = true);
+      final facility = await ApiClient.instance.getFacility();
 
-      widget.apiClient.getFacility((error, response) {
-        if (error != null) throw error;
-        if (response == null) return;
-
-        final data = jsonDecode(response)['data'];
-        final facility = Facility.fromJson(data);
-
-        // Load initial day
-        if (facility.calendar.isNotEmpty) {
-          final initialDay = Day.fromJson(data, facility.calendar.first.date);
-
-          if (!mounted) return;
-
-          setState(() {
-            _facility = facility;
-            _loadedDays[initialDay.date] = initialDay;
-            _isLoading = false;
-          });
-        }
+      if (!mounted) return;
+      setState(() {
+        _facility = facility;
+        _loadedDays[facility.initialDay.date] = facility.initialDay;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
-        _isLoading = false;
       });
     }
   }
@@ -116,21 +96,15 @@ class _OrderPageState extends State<OrderPage> {
     if (!mounted) return;
 
     try {
-      widget.apiClient.getDay(eateryId, date, (error, response) {
-        if (error != null) throw error;
-        if (response == null) return;
+      final day = await ApiClient.instance.getDay(eateryId, date);
 
-        final data = jsonDecode(response)['data'];
-        final day = Day.fromJson(data, date);
-
-        if (!mounted) return;
-
-        setState(() {
-          _loadedDays[date] = day;
-        });
+      if (!mounted) return;
+      setState(() {
+        _loadedDays[date] = day;
       });
     } catch (e) {
       if (!mounted) return;
+      _showErrorSnackBar(e.toString());
       setState(() {
         _error = e.toString();
       });
@@ -139,20 +113,15 @@ class _OrderPageState extends State<OrderPage> {
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
     try {
-      widget.apiClient.order(
-        currentDay.date,
-        currentDay.eatery,
-        meal.id,
-        meal.menuId,
-        (error, response) async {
-          if (error != null) {
-            _showErrorSnackBar('Order failed: ${error.toString()}');
-            return;
-          }
-          await _refreshData(currentDay);
-        },
-      );
-    } finally {
+      await ApiClient.instance
+          .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
+
+      if (!mounted) return;
+      _refreshData(currentDay);
+    } catch (e) {
+      _showErrorSnackBar(e.toString());
+    }
+    finally {
       if (mounted) {
         setState(() {
           _mealTapped[meal.id] = false;
@@ -163,17 +132,12 @@ class _OrderPageState extends State<OrderPage> {
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
     try {
-      widget.apiClient.cancelOrder(
-        currentDay.date,
-        currentDay.eatery,
-        (error, response) async {
-          if (error != null) {
-            _showErrorSnackBar('Cancel order failed: ${error.toString()}');
-            return;
-          }
-          await _refreshData(currentDay);
-        },
-      );
+      await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
+
+      if (!mounted) return;
+      _refreshData(currentDay);
+    } catch (e){
+      _showErrorSnackBar(e.toString());
     } finally {
       if (mounted) {
         setState(() {
@@ -194,7 +158,6 @@ class _OrderPageState extends State<OrderPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-    setState(() => _isLoading = false);
   }
 
   Widget _buildContent() {
@@ -206,13 +169,6 @@ class _OrderPageState extends State<OrderPage> {
           _buildPageView()
         else
           const EmptyStateWidget(),
-        if (_isLoading) ...[
-          ModalBarrier(
-            dismissible: false,
-            color: Theme.of(context).colorScheme.scrim.withAlpha(200),
-          ),
-          const Center(child: CircularProgressIndicator()),
-        ],
       ],
     );
   }
@@ -288,8 +244,8 @@ class _OrderPageState extends State<OrderPage> {
       elevation: 0.0,
       color: color,
       child: ListTile(
-        title: Text(meal.code),
-        subtitle: Text(meal.name),
+        title: Text(meal.name),
+        subtitle: Text(meal.code),
         trailing: _buildMealTrailingIcon(meal, isTapped),
         onTap:
             meal.status != -1 ? () => _handleMealTap(meal, currentDay) : null,
@@ -313,7 +269,6 @@ class _OrderPageState extends State<OrderPage> {
       if (meal.status == 2) {
         _handleCancelOrder(currentDay, meal);
       } else {
-        print('Ordering meal: ${meal.name}');
         _handleOrder(currentDay, meal);
       }
     } else {
@@ -381,15 +336,17 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
-  Widget _buildCalendarTile(CalendarItem item) {
+  Widget? _buildCalendarTile(CalendarItem item) {
     final date = _parseDateTime(item.date);
+    // Students likely don't have lunch on weekends
+    // if (date.weekday >= 6) return null;
+
     final hasOrders = item.orders?.isNotEmpty ?? false;
     final color = _getCalendarTileColor(date.weekday, hasOrders);
     final index = _facility!.calendar.indexOf(item);
 
     return ListTile(
-      trailing: Text(_getDayName(date)),
-      title: Text(item.date),
+      title: Text("${item.date} - ${_getDayName(date)}"),
       tileColor: color,
       subtitle: Text(
           item.orders?.map((order) => order.name).join(', ') ?? 'No orders'),
@@ -409,7 +366,6 @@ class _OrderPageState extends State<OrderPage> {
 
     // Only fetch if we haven't loaded this day yet
     if (!_loadedDays.containsKey(calendarItem.date)) {
-
       // Try to use the same eatery as the previous day
       if (_currentPageIndex < _facility!.calendar.length) {
         final previousDate = _facility!.calendar[_currentPageIndex].date;
