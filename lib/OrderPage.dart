@@ -4,12 +4,11 @@ import 'dart:core';
 import 'package:flutter/material.dart';
 import 'ApiClient.dart';
 import 'Facility.dart';
-import 'main.dart';
 
 class OrderPage extends StatefulWidget {
-  const OrderPage({super.key, required this.apiClient, required this.login});
+ OrderPage({super.key, required this.login});
 
-  final ApiClient apiClient;
+  final ApiClient apiClient = ApiClient();
   final Login login;
 
   @override
@@ -117,8 +116,6 @@ class _OrderPageState extends State<OrderPage> {
     if (!mounted) return;
 
     try {
-      setState(() => _isLoading = true);
-
       widget.apiClient.getDay(eateryId, date, (error, response) {
         if (error != null) throw error;
         if (response == null) return;
@@ -130,21 +127,17 @@ class _OrderPageState extends State<OrderPage> {
 
         setState(() {
           _loadedDays[date] = day;
-          _isLoading = false;
         });
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
-        _isLoading = false;
       });
     }
   }
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
-    setState(() => _isLoading = true);
-
     try {
       widget.apiClient.order(
         currentDay.date,
@@ -163,15 +156,12 @@ class _OrderPageState extends State<OrderPage> {
       if (mounted) {
         setState(() {
           _mealTapped[meal.id] = false;
-          _isLoading = false;
         });
       }
     }
   }
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
-    setState(() => _isLoading = true);
-
     try {
       widget.apiClient.cancelOrder(
         currentDay.date,
@@ -188,7 +178,6 @@ class _OrderPageState extends State<OrderPage> {
       if (mounted) {
         setState(() {
           _mealTapped[meal.id] = false;
-          _isLoading = false;
         });
       }
     }
@@ -324,15 +313,10 @@ class _OrderPageState extends State<OrderPage> {
       if (meal.status == 2) {
         _handleCancelOrder(currentDay, meal);
       } else {
+        print('Ordering meal: ${meal.name}');
         _handleOrder(currentDay, meal);
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Confirm with another tap'),
-          duration: _snackBarDuration,
-        ),
-      );
       setState(() {
         _mealTapped.clear();
         _mealTapped[meal.id] = true;
@@ -418,12 +402,13 @@ class _OrderPageState extends State<OrderPage> {
 
   void _handlePageChange(int index) {
     if (!mounted) return;
+    if (index >= _facility!.calendar.length) return;
 
     final calendarItem = _facility!.calendar[index];
+    String eateryId = _facility!.eateries.first.id;
 
     // Only fetch if we haven't loaded this day yet
     if (!_loadedDays.containsKey(calendarItem.date)) {
-      String eateryId = _facility!.eateries.first.id;
 
       // Try to use the same eatery as the previous day
       if (_currentPageIndex < _facility!.calendar.length) {
@@ -436,17 +421,18 @@ class _OrderPageState extends State<OrderPage> {
 
       _fetchDayData(eateryId, calendarItem.date);
 
-      // Try to fetch the next day
-      if ((index + 1).clamp(0, _facility!.calendar.length - 1) != index) {
-        final nextDate = _facility!.calendar[index + 1].date;
-        _fetchDayData(eateryId, nextDate);
-      }
-
       setState(() {
         _currentPageIndex = index;
         _persistentPageIndex = index;
         _mealTapped.clear();
       });
+    }
+
+    // Let's also check the next day
+    if (index + 1 < _facility!.calendar.length &&
+        !_loadedDays.containsKey(_facility!.calendar[index + 1].date)) {
+      final nextDate = _facility!.calendar[index + 1].date;
+      _fetchDayData(eateryId, nextDate);
     }
   }
 

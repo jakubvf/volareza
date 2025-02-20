@@ -8,11 +8,11 @@ import 'SettingsPage.dart';
 import 'main.dart';
 
 class MainScreen extends StatefulWidget {
-  final ApiClient apiClient;
+  final ApiClient apiClient = ApiClient();
   final Login login;
-  final ThemeNotifier themeNotifier;
+  final SettingsNotifier themeNotifier;
 
-  const MainScreen({super.key, required this.apiClient, required this.login, required this.themeNotifier});
+  MainScreen({super.key, required this.login, required this.themeNotifier});
 
   @override
   _MainScreenState createState() => _MainScreenState();
@@ -26,7 +26,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _pages = [
-      OrderPage(apiClient: widget.apiClient, login: widget.login),
+      OrderPage(login: widget.login),
       SettingsPage(themeNotifier: widget.themeNotifier,),
       ProfilePage(login: widget.login,),
     ];

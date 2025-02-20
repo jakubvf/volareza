@@ -9,7 +9,17 @@ class ApiClient {
   final String password;
   String _cookies = '';
 
-  ApiClient(this.username, this.password);
+  ApiClient._internal(this.username, this.password);
+
+  static ApiClient? _instance;
+
+  static void initialize(String username, String password) {
+    _instance = ApiClient._internal(username, password);
+  }
+
+  factory ApiClient() {
+    return _instance!;
+  }
 
   static String hashPassword(String input) {
     List<int> bytes = utf8.encode(input);

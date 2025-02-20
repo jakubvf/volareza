@@ -8,13 +8,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize theme notifier with saved preferences
-  final themeNotifier = await ThemeNotifier.create();
+  final themeNotifier = await SettingsNotifier.create();
 
   runApp(MyApp(themeNotifier: themeNotifier));
 }
 
 class MyApp extends StatelessWidget {
-  final ThemeNotifier themeNotifier;
+  final SettingsNotifier themeNotifier;
 
   const MyApp({
     super.key,
@@ -46,23 +46,27 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class ThemeNotifier extends ChangeNotifier {
+class SettingsNotifier extends ChangeNotifier {
   static const String _themeModeKey = 'theme_mode';
   static const String _colorSeedKey = 'color_seed';
+  static const String _defaultEateryKey = 'default_eatery';
 
   late ThemeMode _themeMode;
   late Color _colorSeed;
+  late String? _defaultEatery;
+
   final SharedPreferences _prefs;
 
-  ThemeNotifier._(this._prefs) {
+  SettingsNotifier._(this._prefs) {
     // Initialize with default values
     _themeMode = ThemeMode.system;
     _colorSeed = Colors.deepPurple;
+    _defaultEatery = null;
   }
 
-  static Future<ThemeNotifier> create() async {
+  static Future<SettingsNotifier> create() async {
     final prefs = await SharedPreferences.getInstance();
-    final notifier = ThemeNotifier._(prefs);
+    final notifier = SettingsNotifier._(prefs);
     await notifier._loadPreferences();
     return notifier;
   }
@@ -82,10 +86,16 @@ class ThemeNotifier extends ChangeNotifier {
     if (colorValue != null) {
       _colorSeed = Color(colorValue);
     }
+
+    final defaultEatery = _prefs.getString('default_eatery');
+    if (defaultEatery != null) {
+      _defaultEatery = defaultEatery;
+    }
   }
 
   ThemeMode get themeMode => _themeMode;
   Color get colorSeed => _colorSeed;
+  String? get defaultEatery => _defaultEatery;
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
@@ -96,6 +106,12 @@ class ThemeNotifier extends ChangeNotifier {
   Future<void> setColorSeed(Color color) async {
     _colorSeed = color;
     await _prefs.setInt(_colorSeedKey, color.value);
+    notifyListeners();
+  }
+
+  Future<void> setDefaultEatery(String eatery) async {
+    _defaultEatery = eatery;
+    await _prefs.setString(_defaultEateryKey, eatery);
     notifyListeners();
   }
 }

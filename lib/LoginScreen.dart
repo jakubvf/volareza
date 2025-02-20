@@ -8,11 +8,19 @@ import 'package:volareza/main.dart';
 import 'ApiClient.dart';
 import 'Facility.dart';
 
+/// Handles user login. If the login is successful, the user is redirected to the [MainScreen].
+///
+/// If there are credentials in the secure storage, the user is automatically logged in.
+///
+/// The user can log out from the settings screen. See `autoLogin`.
 class LoginScreen extends StatefulWidget {
 
   const LoginScreen({super.key, this.autoLogin = true, required this.themeNotifier});
+  /// `autoLogin` prevents loading credentials from secure storage.
+  ///
+  /// Used for logging out from the settings screen.
   final bool autoLogin;
-  final ThemeNotifier themeNotifier;
+  final SettingsNotifier themeNotifier;
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -31,7 +39,10 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
-      final apiClient = ApiClient(_emailController.text, _passwordController.text);
+      // initialize ApiClient - a singleton handling all API requests
+      ApiClient.initialize(_emailController.text, _passwordController.text);
+      // this is how you get a reference to the singleton
+      final apiClient = ApiClient();
 
       apiClient.login((error, response) async {
         setState(() {
@@ -42,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Login failed: ${error.toString()}')));
         } else {
 
+          // Secure storage doesn't work for me when running on desktop
           if (!kDebugMode) {
             // Save email and password to secure storage
             await _storage.write(key: 'email', value: _emailController.text);
@@ -51,11 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
           Login login = Login.fromJson(jsonDecode(response!)['data']);
 
-          // Navigate to another screen or perform other actions
           if (context.mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => MainScreen(apiClient: apiClient, login: login, themeNotifier: widget.themeNotifier,)),
+              MaterialPageRoute(builder: (context) => MainScreen(login: login, themeNotifier: widget.themeNotifier,)),
             );
           }
         }
@@ -66,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override @override
   void initState() {
     super.initState();
+    // tries to load credentials from storage
     if (widget.autoLogin && !kDebugMode) _loadCredentials();
   }
 

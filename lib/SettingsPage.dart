@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'main.dart';
 
 class SettingsPage extends StatefulWidget {
-  final ThemeNotifier themeNotifier;
+  final SettingsNotifier themeNotifier;
 
   const SettingsPage({
     super.key,
@@ -35,6 +35,25 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
+          // Default eatery
+          Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'Default Eatery',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ListTile(
+                  title: const Text('Eatery'),
+                  subtitle: Text('Canteen'),
+                  onTap:          _showDefaultEateryDialog,
+                  )])
+    ),
+          // Appearance
           Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,6 +204,10 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     );
   }
+
+  void _showDefaultEateryDialog() {
+  }
+
 }
 
 class ColorSeedOption {
