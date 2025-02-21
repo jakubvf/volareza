@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'main.dart';
 
 class SettingsPage extends StatefulWidget {
-  final SettingsNotifier themeNotifier;
+  final SettingsNotifier settingsNotifier;
 
   const SettingsPage({
     super.key,
-    required this.themeNotifier,
+    required this.settingsNotifier,
   });
 
   @override
@@ -18,41 +18,41 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
 
   final List<ColorSeedOption> colorOptions = [
-    ColorSeedOption('Deep Purple', Colors.deepPurple),
-    ColorSeedOption('Indigo', Colors.indigo),
-    ColorSeedOption('Blue', Colors.blue),
-    ColorSeedOption('Teal', Colors.teal),
-    ColorSeedOption('Green', Colors.green),
-    ColorSeedOption('Orange', Colors.orange),
+    ColorSeedOption('Tmavě fialová', Color(Colors.deepPurple.toARGB32())),
+    ColorSeedOption('Indigo', Color(Colors.indigo.toARGB32())),
+    ColorSeedOption('Modrá', Color(Colors.blue.toARGB32())),
+    ColorSeedOption('Modrozelená', Color(Colors.teal.toARGB32())),
+    ColorSeedOption('Zelená', Color(Colors.green.toARGB32())),
+    ColorSeedOption('Oranžová', Color(Colors.orange.toARGB32())),
+    ColorSeedOption('Žlutá', Color(Colors.yellow.toARGB32())),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: const Text('Nastavení'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
           // Default eatery
           Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'Default Eatery',
+                    'Oblíbená jídelna',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 ListTile(
-                  title: const Text('Eatery'),
-                  subtitle: Text('Canteen'),
-                  onTap:          _showDefaultEateryDialog,
-                  )])
-    ),
+                  title: const Text('Jídelna'),
+                  onTap: _showDefaultEateryDialog,
+                )
+              ])),
           // Appearance
           Card(
             child: Column(
@@ -61,17 +61,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'Appearance',
+                    'Vzhled aplikace',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 ListTile(
-                  title: const Text('Theme'),
+                  title: const Text('Světlý a tmavý vzhled'),
                   subtitle: Text(_getThemeText()),
                   onTap: _showThemeDialog,
                 ),
                 ListTile(
-                  title: const Text('Color Scheme'),
+                  title: const Text('Barvné rozvržení'),
                   subtitle: Text(_getColorText()),
                   onTap: _showColorDialog,
                 ),
@@ -86,12 +86,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'Notifications',
+                    'Oznámení',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 SwitchListTile(
-                  title: const Text('Enable Notifications'),
+                  title: const Text('Zapnout oznámení'),
                   value: _notificationsEnabled,
                   onChanged: (bool value) {
                     setState(() {
@@ -108,21 +108,21 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _getThemeText() {
-    switch (widget.themeNotifier.themeMode) {
+    switch (widget.settingsNotifier.themeMode) {
       case ThemeMode.system:
-        return 'System';
+        return 'Podle systému';
       case ThemeMode.light:
-        return 'Light';
+        return 'Vždy světlý';
       case ThemeMode.dark:
-        return 'Dark';
+        return 'Vždy tmavý';
     }
   }
 
   String _getColorText() {
-    final currentColor = widget.themeNotifier.colorSeed;
+    final currentColor = widget.settingsNotifier.colorSeed;
     final option = colorOptions.firstWhere(
-          (option) => option.color == currentColor,
-      orElse: () => ColorSeedOption('Custom', currentColor),
+      (option) => option.color == currentColor,
+      orElse: () => ColorSeedOption('Vlastní', currentColor),
     );
     return option.name;
   }
@@ -132,34 +132,34 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Select Theme'),
+          title: const Text('Zvolte vzhled'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               RadioListTile<ThemeMode>(
-                title: const Text('System'),
+                title: const Text('Podle systému'),
                 value: ThemeMode.system,
-                groupValue: widget.themeNotifier.themeMode,
+                groupValue: widget.settingsNotifier.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.themeNotifier.setThemeMode(value!);
+                  await widget.settingsNotifier.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
               RadioListTile<ThemeMode>(
-                title: const Text('Light'),
+                title: const Text('Vždy světlý'),
                 value: ThemeMode.light,
-                groupValue: widget.themeNotifier.themeMode,
+                groupValue: widget.settingsNotifier.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.themeNotifier.setThemeMode(value!);
+                  await widget.settingsNotifier.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
               RadioListTile<ThemeMode>(
-                title: const Text('Dark'),
+                title: const Text('Vždy tmavý'),
                 value: ThemeMode.dark,
-                groupValue: widget.themeNotifier.themeMode,
+                groupValue: widget.settingsNotifier.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.themeNotifier.setThemeMode(value!);
+                  await widget.settingsNotifier.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
@@ -175,7 +175,7 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Select Color Scheme'),
+          title: const Text('Zvolte barvu'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -191,9 +191,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   value: option.color,
-                  groupValue: widget.themeNotifier.colorSeed,
+                  groupValue: widget.settingsNotifier.colorSeed,
                   onChanged: (Color? value) async {
-                    await widget.themeNotifier.setColorSeed(value!);
+                    await widget.settingsNotifier.setColorSeed(value!);
                     if (mounted) Navigator.of(context).pop();
                   },
                 );
@@ -205,9 +205,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showDefaultEateryDialog() {
-  }
-
+  void _showDefaultEateryDialog() {}
 }
 
 class ColorSeedOption {

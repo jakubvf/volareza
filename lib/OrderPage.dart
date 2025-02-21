@@ -103,7 +103,7 @@ class _OrderPageState extends State<OrderPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Credit: ',
+              'Kredit: ',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             AnimatedCreditLabel(
@@ -265,7 +265,7 @@ class _OrderPageState extends State<OrderPage> {
           child: meals.lunch.isEmpty
               ? Center(
             child: Text(
-              "No meals available",
+              "Žádná jídla k dispozici",
               style: Theme.of(context).textTheme.titleMedium,
             ),
           )
@@ -362,7 +362,7 @@ class _OrderPageState extends State<OrderPage> {
 
     return DropdownButton<String>(
       value: currentEatery.name,
-      hint: const Text('Select eatery'),
+      hint: const Text('Zvolit jídelnu'),
       items: _facility!.eateries
           .map((eatery) => DropdownMenuItem<String>(
         value: eatery.name,
@@ -389,7 +389,7 @@ class _OrderPageState extends State<OrderPage> {
   Widget _buildCalendarDrawer() {
     if (_facility == null || _facility!.calendar.isEmpty) {
       return const Drawer(
-        child: Center(child: Text('No calendar entries available')),
+        child: Center(child: Text('Nepodařilo se načíst kalendář')),
       );
     }
 
@@ -412,7 +412,7 @@ class _OrderPageState extends State<OrderPage> {
       title: Text("${item.date} - ${DateFormat('EEEE').format(date)}"),
       tileColor: color,
       subtitle: Text(
-          item.orders?.map((order) => order.name).join(', ') ?? 'No orders'),
+          item.orders?.map((order) => order.name).join(', ') ?? 'Žádné objednávky'),
       onTap: () {
         Navigator.pop(context);
         _pageController.jumpToPage(index);
@@ -497,7 +497,7 @@ class ErrorDisplay extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Text(
-          'Error: $error',
+          'Chyba: $error',
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),

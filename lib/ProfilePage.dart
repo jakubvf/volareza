@@ -10,7 +10,7 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Profile'),
+        title: Text('Profil'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(18.0),
@@ -23,7 +23,7 @@ class ProfilePage extends StatelessWidget {
               child: Column(
                 children: [
                   ListTile(
-                    title: Text('Name'),
+                    title: Text('Jméno'),
                     subtitle: Text(login.fullName),
                   ),
                   ListTile(
@@ -31,11 +31,11 @@ class ProfilePage extends StatelessWidget {
                     subtitle: Text(login.userNm),
                   ),
                   ListTile(
-                    title: Text('Credit'),
+                    title: Text('Kredit'),
                     subtitle: Text('${login.credit} Kč'),
                   ),
                   ListTile(
-                    title: Text('Facility'),
+                    title: Text('Stravovací zařízení'),
                     subtitle: Text(login.facNm),
                   ),
                 ],
@@ -50,7 +50,7 @@ class ProfilePage extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),
-                child: const Text('Logout'),
+                child: const Text('Odhlásit se'),
               ),
             ),
           ],

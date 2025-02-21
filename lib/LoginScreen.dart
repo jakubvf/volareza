@@ -1,12 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
 import 'package:volareza/main.dart';
 import 'ApiClient.dart';
-import 'json_parsing.dart';
 
 /// Handles user login. If the login is successful, the user is redirected to the [MainScreen].
 ///
@@ -15,12 +12,12 @@ import 'json_parsing.dart';
 /// The user can log out from the settings screen. See `autoLogin`.
 class LoginScreen extends StatefulWidget {
 
-  const LoginScreen({super.key, this.autoLogin = true, required this.themeNotifier});
+  const LoginScreen({super.key, this.autoLogin = true, required this.settingsNotifier});
   /// `autoLogin` prevents loading credentials from secure storage.
   ///
   /// Used for logging out from the settings screen.
   final bool autoLogin;
-  final SettingsNotifier themeNotifier;
+  final SettingsNotifier settingsNotifier;
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -61,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => MainScreen(login: loginResult, themeNotifier: widget.themeNotifier,)),
+            MaterialPageRoute(builder: (context) => MainScreen(login: loginResult, settingsNotifier: widget.settingsNotifier,)),
           );
 
 
@@ -72,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Login failed: ${e.message}')));
+              SnackBar(content: Text('Přihlášení se nezdařilo: ${e.message}')));
         }
       } catch (e) {
         // Handle other unexpected errors
@@ -81,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Login failed: ${e.toString()}')));
+              SnackBar(content: Text('Přihlášení se nezdařilo: ${e.toString()}')));
         }
       }
     }
@@ -123,18 +120,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(labelText: 'Email'),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
+                    return 'Doplňte email';
                   }
                   return null;
                 },
               ),
               TextFormField(
                 controller: _passwordController,
-                decoration: InputDecoration(labelText: 'Password'),
+                decoration: InputDecoration(labelText: 'Heslo'),
                 obscureText: true,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
+                    return 'Doplňte heslo';
                   }
                   return null;
                 },
@@ -145,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   : ElevatedButton(
                 autofocus: true,
                 onPressed: _submit,
-                child: Text('Submit'),
+                child: Text('Přihlásit se'),
               ),
             ],
           ),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+
+
+/// A label that animates between two values. Used for displaying credit.
 class AnimatedCreditLabel extends StatefulWidget {
   final double startValue;
   final double endValue;

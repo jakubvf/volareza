@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'ApiClient.dart';
 import 'json_parsing.dart';
 import 'OrderPage.dart';
 import 'ProfilePage.dart';
@@ -9,9 +8,9 @@ import 'main.dart';
 
 class MainScreen extends StatefulWidget {
   final Login login;
-  final SettingsNotifier themeNotifier;
+  final SettingsNotifier settingsNotifier;
 
-  MainScreen({super.key, required this.login, required this.themeNotifier});
+  MainScreen({super.key, required this.login, required this.settingsNotifier});
 
   @override
   _MainScreenState createState() => _MainScreenState();
@@ -26,7 +25,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _pages = [
       OrderPage(login: widget.login),
-      SettingsPage(themeNotifier: widget.themeNotifier,),
+      SettingsPage(settingsNotifier: widget.settingsNotifier,),
       ProfilePage(login: widget.login,),
     ];
   }
@@ -45,15 +44,15 @@ class _MainScreenState extends State<MainScreen> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.restaurant_menu),
-            label: 'Orders',
+            label: 'Objednávky',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: 'Settings',
+            label: 'Nastavení',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
-            label: 'Profile',
+            label: 'Profil',
           ),
         ],
         currentIndex: _selectedPageIndex,

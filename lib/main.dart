@@ -8,38 +8,38 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize theme notifier with saved preferences
-  final themeNotifier = await SettingsNotifier.create();
+  final settingsNotifier = await SettingsNotifier.create();
 
-  runApp(MyApp(themeNotifier: themeNotifier));
+  runApp(MyApp(settingsNotifier: settingsNotifier));
 }
 
 class MyApp extends StatelessWidget {
-  final SettingsNotifier themeNotifier;
+  final SettingsNotifier settingsNotifier;
 
   const MyApp({
     super.key,
-    required this.themeNotifier,
+    required this.settingsNotifier,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: themeNotifier,
+      listenable: settingsNotifier,
       builder: (context, child) {
         return MaterialApp(
           title: 'Volareza',
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
-            colorSchemeSeed: themeNotifier.colorSeed,
+            colorSchemeSeed: settingsNotifier.colorSeed,
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.dark,
-            colorSchemeSeed: themeNotifier.colorSeed,
+            colorSchemeSeed: settingsNotifier.colorSeed,
           ),
-          themeMode: themeNotifier.themeMode,
-          home: LoginScreen(themeNotifier: themeNotifier),
+          themeMode: settingsNotifier.themeMode,
+          home: LoginScreen(settingsNotifier: settingsNotifier),
         );
       },
     );
@@ -105,7 +105,6 @@ class SettingsNotifier extends ChangeNotifier {
 
   Future<void> setColorSeed(Color color) async {
     _colorSeed = color;
-    // TODO: using toARGB32 causes the UI to show unknown color after restart
     await _prefs.setInt(_colorSeedKey, color.toARGB32());
     notifyListeners();
   }

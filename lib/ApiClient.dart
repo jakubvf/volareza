@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import 'json_parsing.dart';
 
+
+/// A singleton class that handles all API requests.
 class ApiClient {
   final String username;
   final String password;
