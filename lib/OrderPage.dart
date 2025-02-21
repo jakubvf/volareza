@@ -1,13 +1,11 @@
-import 'dart:convert';
-import 'dart:core';
-
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'AnimatedCreditLabel.dart';
 import 'ApiClient.dart';
 import 'json_parsing.dart';
 
 class OrderPage extends StatefulWidget {
-  OrderPage({super.key, required this.login});
+  const OrderPage({super.key, required this.login});
 
   final Login login;
 
@@ -31,18 +29,46 @@ class _OrderPageState extends State<OrderPage> {
   double _previousCredit = 0;
   double _currentCredit = 0;
 
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-
-    // keeping 0 here, until persistent index works
-    _pageController = PageController(initialPage: 0);
+    _pageController = PageController(initialPage: _persistentPageIndex);
     _currentPageIndex = _persistentPageIndex;
-
     _login = widget.login;
     _currentCredit = double.parse(_login.credit);
 
-    _fetchFacilityData();
+    _fetchInitialData(); // Fetch initial data immediately
+  }
+
+  Future<void> _fetchInitialData() async {
+    await _fetchFacilityData().then((_) {
+      // After facility data is loaded, fetch the initial day's data
+      if (_facility != null && _facility!.calendar.isNotEmpty) {
+        final initialCalendarItem = _facility!.calendar[_persistentPageIndex];
+        String eateryId = _facility!.eateries.first.id;
+
+        //Ensure the eatery id exists, otherwise default to first.
+        if (_facility!.eateries.isEmpty){
+          eateryId = _facility!.eateries.first.id;
+        }
+        _fetchDayData(eateryId, initialCalendarItem.date).then((_) {
+          setState(() {
+            _isLoading = false; // Set loading to false after initial data is fetched
+          });
+        });
+      } else {
+        setState(() {
+          _isLoading = false; // Set loading to false if there's no calendar data
+        });
+      }
+    }).catchError((error) {
+      _handleError(error);
+      setState(() {
+        _isLoading = false; // Ensure loading is set to false even if there's an error
+      });
+    });
   }
 
   @override
@@ -62,31 +88,35 @@ class _OrderPageState extends State<OrderPage> {
             height: 40,
           ),
           actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Credit: ',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    AnimatedCreditLabel(
-                      startValue: _previousCredit,
-                      endValue: _currentCredit,
-                      suffix: ' Kč',
-                      textStyle: Theme.of(context).textTheme.titleMedium,
-                      duration: const Duration(milliseconds: 800),
-                      decimals: 2,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            _buildCreditDisplay(context),
           ]),
       drawer: _buildCalendarDrawer(),
-      body: _buildContent(),
+      body: _isLoading ? const LoadingIndicator() : _buildContent(), // Conditionally render content
+    );
+  }
+
+  Widget _buildCreditDisplay(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Credit: ',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            AnimatedCreditLabel(
+              startValue: _previousCredit,
+              endValue: _currentCredit,
+              suffix: ' Kč',
+              textStyle: Theme.of(context).textTheme.titleMedium,
+              duration: const Duration(milliseconds: 800),
+              decimals: 2,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -101,11 +131,11 @@ class _OrderPageState extends State<OrderPage> {
         _facility = facility;
         _loadedDays[facility.initialDay.date] = facility.initialDay;
       });
+      return;
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-      });
+      _handleError(e);
+      return;
     }
   }
 
@@ -119,16 +149,15 @@ class _OrderPageState extends State<OrderPage> {
       setState(() {
         _loadedDays[date] = day;
       });
+      return;
     } catch (e) {
       if (!mounted) return;
-      _showErrorSnackBar(e.toString());
-      setState(() {
-        _error = e.toString();
-      });
+      _handleError(e);
+      return;
     }
   }
 
-  double figureOutPriceForAMeal(Day currentDay, Meal meal) {
+  double _figureOutPriceForAMeal(Day currentDay, Meal meal) {
     // I know this is stupid, but I don't know how to do it better
     if (meal.code.contains("5")) {
       return double.parse(currentDay.prices.lunch[1]['price']);
@@ -138,43 +167,51 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
-    try {
-      setState(() {
-        _mealTapped[meal.id] = false;
-        _previousCredit = _currentCredit;
-        _currentCredit -= figureOutPriceForAMeal(currentDay, meal);
-      });
+    _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
 
+    try {
       await ApiClient.instance
           .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
 
       if (!mounted) return;
       _refreshData(currentDay);
     } catch (e) {
-      _showErrorSnackBar(e.toString());
+      _handleError(e);
     }
   }
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
-    try {
-      setState(() {
-        _mealTapped[meal.id] = false;
-        _previousCredit = _currentCredit;
-        _currentCredit += figureOutPriceForAMeal(currentDay, meal);
-      });
+    _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
 
+    try {
       await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
 
       if (!mounted) return;
       _refreshData(currentDay);
     } catch (e) {
-      _showErrorSnackBar(e.toString());
+      _handleError(e);
     }
+  }
+
+  void _updateCredit(double amount) {
+    setState(() {
+      _mealTapped.clear();
+      _previousCredit = _currentCredit;
+      _currentCredit += amount;
+    });
   }
 
   Future<void> _refreshData(Day currentDay) async {
     await _fetchDayData(currentDay.eatery, currentDay.date);
     await _fetchFacilityData();
+  }
+
+  void _handleError(dynamic error) {
+    final errorMessage = error.toString();
+    _showErrorSnackBar(errorMessage);
+    setState(() {
+      _error = errorMessage;
+    });
   }
 
   void _showErrorSnackBar(String message) {
@@ -189,18 +226,18 @@ class _OrderPageState extends State<OrderPage> {
     return Stack(
       children: [
         if (_error != null)
-          CustomErrorWidget(_error!)
+          ErrorDisplay(error: _error!) // Use a named parameter
         else if (_facility != null)
           _buildPageView()
         else
-          const EmptyStateWidget(),
+          const LoadingIndicator(), // More descriptive name
       ],
     );
   }
 
   Widget _buildPageView() {
     if (_facility == null || _facility!.calendar.isEmpty) {
-      return const EmptyStateWidget();
+      return const LoadingIndicator();
     }
 
     return PageView.builder(
@@ -211,11 +248,9 @@ class _OrderPageState extends State<OrderPage> {
         final calendarItem = _facility!.calendar[index];
         final currentDay = _loadedDays[calendarItem.date];
 
-        if (currentDay != null) {
-          return _buildDayContent(currentDay);
-        }
-
-        return const EmptyStateWidget();
+        return currentDay != null
+            ? _buildDayContent(currentDay)
+            : const LoadingIndicator(); // Consider showing loading here too
       },
     );
   }
@@ -228,34 +263,40 @@ class _OrderPageState extends State<OrderPage> {
         const Padding(padding: EdgeInsets.only(top: 16)),
         Expanded(
           child: meals.lunch.isEmpty
-              ? Text(
-                  "No meals available",
-                  style: Theme.of(context).textTheme.titleMedium,
-                )
-              : ListView(
-                  children: meals.lunch
-                      .map((meal) => _buildMealCard(meal, currentDay))
-                      .toList(),
-                ),
-        ),
-        const Divider(),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              Expanded(
-                child: Text(
-                  '${_getDayName(_parseDateTime(currentDay.date))} ${currentDay.date}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              _buildEateriesDropdown(currentDay),
-            ],
+              ? Center(
+            child: Text(
+              "No meals available",
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          )
+              : ListView.builder(
+            itemCount: meals.lunch.length,
+            itemBuilder: (context, index) =>
+                _buildMealCard(meals.lunch[index], currentDay),
           ),
         ),
+        const Divider(),
+        _buildDayInfoRow(currentDay),
         const Padding(padding: EdgeInsets.only(bottom: 12)),
       ],
+    );
+  }
+
+  Widget _buildDayInfoRow(Day currentDay) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          Expanded(
+            child: Text(
+              '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}', // Use DateFormat
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          _buildEateriesDropdown(currentDay),
+        ],
+      ),
     );
   }
 
@@ -271,15 +312,15 @@ class _OrderPageState extends State<OrderPage> {
       child: ListTile(
         title: Text(meal.name),
         subtitle: Text(meal.code),
-        trailing: _buildMealTrailingIcon(meal, isTapped),
+        trailing: _buildMealTrailingIcon(meal, isTapped, meal.status),
         onTap:
-            meal.status != -1 ? () => _handleMealTap(meal, currentDay) : null,
+        meal.status != -1 ? () => _handleMealTap(meal, currentDay, meal) : null,
       ),
     );
   }
 
-  Widget? _buildMealTrailingIcon(Meal meal, bool isTapped) {
-    if (!isTapped && meal.status != 2) return null;
+  Widget? _buildMealTrailingIcon(Meal meal, bool isTapped, int status) {
+    if (!isTapped && status != 2) return null;
 
     return Icon(
       isTapped ? Icons.check_outlined : Icons.check,
@@ -287,29 +328,29 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
-  void _handleMealTap(Meal meal, Day currentDay) {
-    final isTapped = _mealTapped[meal.id] ?? false;
+  void _handleMealTap(Meal meal, Day currentDay, Meal tappedMeal) {
+    final isTapped = _mealTapped[tappedMeal.id] ?? false;
 
     if (isTapped) {
-      if (meal.status == 2) {
-        _handleCancelOrder(currentDay, meal);
+      if (tappedMeal.status == 2) {
+        _handleCancelOrder(currentDay, tappedMeal);
       } else {
-        _handleOrder(currentDay, meal);
+        _handleOrder(currentDay, tappedMeal);
       }
     } else {
       setState(() {
         _mealTapped.clear();
-        _mealTapped[meal.id] = true;
+        _mealTapped[tappedMeal.id] = true;
       });
     }
   }
 
   Color _getMealStatusColor(int status) => switch (status) {
-        -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
-        0 => Theme.of(context).colorScheme.surfaceContainerHighest,
-        2 => Theme.of(context).colorScheme.primaryContainer,
-        _ => throw UnimplementedError(),
-      };
+    -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
+    0 => Theme.of(context).colorScheme.surfaceContainerHighest,
+    2 => Theme.of(context).colorScheme.primaryContainer,
+    _ => throw UnimplementedError(),
+  };
 
   Widget _buildEateriesDropdown(Day currentDay) {
     if (_facility == null || _facility!.eateries.isEmpty) {
@@ -317,16 +358,16 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     final currentEatery =
-        _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
+    _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
 
     return DropdownButton<String>(
       value: currentEatery.name,
       hint: const Text('Select eatery'),
       items: _facility!.eateries
           .map((eatery) => DropdownMenuItem<String>(
-                value: eatery.name,
-                child: Text(eatery.name),
-              ))
+        value: eatery.name,
+        child: Text(eatery.name),
+      ))
           .toList(),
       onChanged: (String? newValue) {
         if (newValue == null) return;
@@ -356,22 +397,19 @@ class _OrderPageState extends State<OrderPage> {
       child: ListView.builder(
         itemCount: _facility!.calendar.length,
         itemBuilder: (context, index) =>
-            _buildCalendarTile(_facility!.calendar[index]),
+            _buildCalendarTile(_facility!.calendar[index], index),
       ),
     );
   }
 
-  Widget? _buildCalendarTile(CalendarItem item) {
+  Widget _buildCalendarTile(CalendarItem item, int index) {
     final date = _parseDateTime(item.date);
-    // Students likely don't have lunch on weekends
-    // if (date.weekday >= 6) return null;
 
     final hasOrders = item.orders?.isNotEmpty ?? false;
     final color = _getCalendarTileColor(date.weekday, hasOrders);
-    final index = _facility!.calendar.indexOf(item);
 
     return ListTile(
-      title: Text("${item.date} - ${_getDayName(date)}"),
+      title: Text("${item.date} - ${DateFormat('EEEE').format(date)}"),
       tileColor: color,
       subtitle: Text(
           item.orders?.map((order) => order.name).join(', ') ?? 'No orders'),
@@ -384,7 +422,7 @@ class _OrderPageState extends State<OrderPage> {
 
   void _handlePageChange(int index) {
     if (!mounted) return;
-    if (index >= _facility!.calendar.length) return;
+    if (_facility == null || index >= _facility!.calendar.length) return;
 
     final calendarItem = _facility!.calendar[index];
     String eateryId = _facility!.eateries.first.id;
@@ -432,43 +470,37 @@ class _OrderPageState extends State<OrderPage> {
 }
 
 DateTime _parseDateTime(String date) {
-  final match = RegExp(r'(\d{1,2})\.(\d{1,2})\.(\d{4})').firstMatch(date);
-  if (match == null) {
+  try {
+    return DateFormat('dd.MM.yyyy').parse(date);
+  } catch (e) {
     throw FormatException('Invalid date format: $date');
   }
-
-  return DateTime(
-    int.parse(match.group(3)!),
-    int.parse(match.group(2)!),
-    int.parse(match.group(1)!),
-  );
 }
 
-String _getDayName(DateTime date) => switch (date.weekday) {
-      1 => 'Monday',
-      2 => 'Tuesday',
-      3 => 'Wednesday',
-      4 => 'Thursday',
-      5 => 'Friday',
-      6 => 'Saturday',
-      7 => 'Sunday',
-      _ => throw UnimplementedError(),
-    };
-
-class EmptyStateWidget extends StatelessWidget {
-  const EmptyStateWidget({super.key});
+class LoadingIndicator extends StatelessWidget {
+  const LoadingIndicator({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const Center(child: Icon(Icons.downloading, size: 64));
+  Widget build(BuildContext context) {
+    return const Center(child: CircularProgressIndicator());
+  }
 }
 
-class CustomErrorWidget extends StatelessWidget {
+class ErrorDisplay extends StatelessWidget {
   final String error;
 
-  const CustomErrorWidget(this.error, {super.key});
+  const ErrorDisplay({super.key, required this.error}); // Use named parameter
 
   @override
-  @override
-  Widget build(BuildContext context) => Text('Error: $error');
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text(
+          'Error: $error',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
+        ),
+      ),
+    );
+  }
 }
