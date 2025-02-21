@@ -24,9 +24,9 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _pages = [
-      OrderPage(login: widget.login),
-      SettingsPage(settingsNotifier: widget.settingsNotifier,),
-      ProfilePage(login: widget.login,),
+      OrderPage(login: widget.login, settingsNotifier: widget.settingsNotifier),
+      SettingsPage(settingsNotifier: widget.settingsNotifier),
+      ProfilePage(login: widget.login),
     ];
   }
 
@@ -38,26 +38,30 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages.elementAt(_selectedPageIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.restaurant_menu),
-            label: 'Objednávky',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Nastavení',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
-        currentIndex: _selectedPageIndex,
-        onTap: _onItemTapped,
-      ),
+    return Column(
+      children: [
+        Expanded(
+          child: _pages.elementAt(_selectedPageIndex),
+        ),
+        BottomNavigationBar(
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.restaurant_menu),
+              label: 'Objednávky',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'Nastavení',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person),
+              label: 'Profil',
+            ),
+          ],
+          currentIndex: _selectedPageIndex,
+          onTap: _onItemTapped,
+        ),
+      ],
     );
   }
 }

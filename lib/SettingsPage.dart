@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:volareza/json_parsing.dart';
 
+import 'ApiClient.dart';
 import 'main.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -16,6 +18,9 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
+  String _facilityName = 'Načítám...'; // Initial state while loading
+
+  Facility? _facility;
 
   final List<ColorSeedOption> colorOptions = [
     ColorSeedOption('Tmavě fialová', Color(Colors.deepPurple.toARGB32())),
@@ -26,6 +31,38 @@ class _SettingsPageState extends State<SettingsPage> {
     ColorSeedOption('Oranžová', Color(Colors.orange.toARGB32())),
     ColorSeedOption('Žlutá', Color(Colors.yellow.toARGB32())),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFacility();
+  }
+
+  Future<void> _loadFacility() async {
+    try {
+      _facility = await ApiClient.instance.getFacility();
+
+      // Set default eatery if not set
+      if (widget.settingsNotifier.defaultEatery == null) {
+        widget.settingsNotifier.setDefaultEatery(_facility!.eateries.first.id);
+      }
+
+      // Find the default eatery inside preferences
+      final eatery = _facility!.eateries
+          .where((eatery) => eatery.id == widget.settingsNotifier.defaultEatery)
+          .first;
+
+      setState(() {
+        _facilityName = eatery.name;
+      });
+    } catch (e) {
+      // Handle error appropriately, e.g., show an error message
+      print('Error loading facility: $e');
+      setState(() {
+        _facilityName = 'Chyba načítání'; // Display error message
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,12 +81,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'Oblíbená jídelna',
+                    'Výchozí jídelna',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                description('Vyberte jídelnu, kterou používáte nejčastěji. Aplikace si ji zapamatuje a automaticky ji zobrazí jako první, takže nebudete muset pokaždé vybírat ručně.'),
                 ListTile(
-                  title: const Text('Jídelna'),
+                  title: Text(_facilityName),
+                  leading: const Icon(Icons.restaurant),
                   onTap: _showDefaultEateryDialog,
                 )
               ])),
@@ -65,15 +104,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                description('Přizpůsobte si vzhled aplikace dle svých preferencí. Vyberte si mezi světlým, tmavým režimem a přizpůsobte si barevné schéma.'),
                 ListTile(
                   title: const Text('Světlý a tmavý vzhled'),
                   subtitle: Text(_getThemeText()),
                   onTap: _showThemeDialog,
+                  leading: const Icon(Icons.format_paint),
                 ),
                 ListTile(
                   title: const Text('Barvné rozvržení'),
                   subtitle: Text(_getColorText()),
                   onTap: _showColorDialog,
+                  leading: const Icon(Icons.color_lens),
                 ),
               ],
             ),
@@ -205,7 +247,41 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showDefaultEateryDialog() {}
+  void _showDefaultEateryDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Zvolte oblíbenou jídelnu'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _facility!.eateries.map((eatery) {
+                return RadioListTile<String>(
+                  title: Text(eatery.name),
+                  value: eatery.id,
+                  groupValue: widget.settingsNotifier.defaultEatery,
+                  onChanged: (String? value) async {
+                    await widget.settingsNotifier.setDefaultEatery(value!);
+                    setState(() {
+                      _facilityName = eatery.name;
+                    });
+                    if (mounted) Navigator.of(context).pop();
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget description(String text) {
+    return Padding(padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
+      child: Text(text, style: const TextStyle(color: Colors.grey, fontSize: 13),),
+    );
+  }
 }
 
 class ColorSeedOption {

@@ -3,72 +3,98 @@ import 'package:intl/intl.dart';
 import 'AnimatedCreditLabel.dart';
 import 'ApiClient.dart';
 import 'json_parsing.dart';
+import 'main.dart';
 
 class OrderPage extends StatefulWidget {
-  const OrderPage({super.key, required this.login});
+  const OrderPage(
+      {super.key, required this.login, required this.settingsNotifier});
 
   final Login login;
+  final SettingsNotifier settingsNotifier;
 
   @override
   State<OrderPage> createState() => _OrderPageState();
 }
 
 class _OrderPageState extends State<OrderPage> {
+  /// Stores the user's login data. Used for credit.
   late final Login _login;
+
+  /// Stores the tapped meals. Used for ordering.
   final Map<String, bool> _mealTapped = {};
+
+  /// Stores the days that have been loaded. Duh.
   final Map<String, Day> _loadedDays = {};
 
   Facility? _facility;
+
+  /// Stores the error message if an error occurs.
   String? _error;
+
+  /// Contains each day's page.
+  /// Has the ability to swipe between days.
   late PageController _pageController;
 
-  // static because we want to keep the index even when the user leaves to settings/profile pages
+  /// static because we want to keep the index even when the user leaves to settings/profile pages
+  /// although this doesn't work as expected because the page is rebuilt when the user returns
   static int _persistentPageIndex = 0;
-  late int _currentPageIndex;
 
+  /// Used for animating the credit label.
   double _previousCredit = 0;
+
+  /// Used for animating the credit label.
+  /// This value is disconnected from Login.credit.
+  /// I don't want to fetch the new login structure every time the user orders something.
   double _currentCredit = 0;
 
+  /// Displays a loading indicator while doing work (mostly just waiting for network).
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _persistentPageIndex);
-    _currentPageIndex = _persistentPageIndex;
     _login = widget.login;
     _currentCredit = double.parse(_login.credit);
 
-    _fetchInitialData(); // Fetch initial data immediately
+    _initializeData();
   }
 
-  Future<void> _fetchInitialData() async {
-    await _fetchFacilityData().then((_) {
-      // After facility data is loaded, fetch the initial day's data
-      if (_facility != null && _facility!.calendar.isNotEmpty) {
-        final initialCalendarItem = _facility!.calendar[_persistentPageIndex];
-        String eateryId = _facility!.eateries.first.id;
-
-        //Ensure the eatery id exists, otherwise default to first.
-        if (_facility!.eateries.isEmpty){
-          eateryId = _facility!.eateries.first.id;
+  Future<void> _initializeData() async {
+    try {
+      await _fetchFacilityData().then((_) async {
+        if (_facility != null && _facility!.calendar.isNotEmpty) {
+          // Load initial data and preload adjacent pages
+          await _preloadDataAroundIndex(_persistentPageIndex);
+          setState(() => _isLoading = false); // Hide loading indicator
+        } else {
+          setState(() => _isLoading = false);
         }
-        _fetchDayData(eateryId, initialCalendarItem.date).then((_) {
-          setState(() {
-            _isLoading = false; // Set loading to false after initial data is fetched
-          });
-        });
-      } else {
-        setState(() {
-          _isLoading = false; // Set loading to false if there's no calendar data
-        });
-      }
-    }).catchError((error) {
-      _handleError(error);
-      setState(() {
-        _isLoading = false; // Ensure loading is set to false even if there's an error
       });
-    });
+    } catch (error) {
+      _handleError(error);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _preloadDataAroundIndex(int index) async {
+    final calendar = _facility!.calendar;
+    final initialCalendarItem = calendar[index];
+    String eateryId = _facility!.eateries.first.id;
+
+    await _fetchDayData(eateryId, initialCalendarItem.date);
+
+    // Preload the next day
+    if (index + 1 < calendar.length) {
+      final nextCalendarItem = calendar[index + 1];
+      await _fetchDayData(eateryId, nextCalendarItem.date);
+    }
+
+    // Preload the previous day
+    if (index - 1 >= 0) {
+      final prevCalendarItem = calendar[index - 1];
+      await _fetchDayData(eateryId, prevCalendarItem.date);
+    }
   }
 
   @override
@@ -91,7 +117,7 @@ class _OrderPageState extends State<OrderPage> {
             _buildCreditDisplay(context),
           ]),
       drawer: _buildCalendarDrawer(),
-      body: _isLoading ? const LoadingIndicator() : _buildContent(), // Conditionally render content
+      body: _isLoading ? const LoadingIndicator() : _buildContent(),
     );
   }
 
@@ -167,6 +193,8 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
+    _optimisticUpdate(currentDay, meal, true);
+
     _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
 
     try {
@@ -181,6 +209,7 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
+    _optimisticUpdate(currentDay, meal, false);
     _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
 
     try {
@@ -192,6 +221,40 @@ class _OrderPageState extends State<OrderPage> {
       _handleError(e);
     }
   }
+
+  void _optimisticUpdate(Day currentDay, Meal meal, bool isOrdering) {
+    // Optimistic update to skip UI delays
+    List<Meal> updatedLunchMeals = currentDay.meals.lunch.map((m) {
+      if (m.id == meal.id) {
+        // Create a copy of the meal with the updated status
+        return Meal(
+          id: m.id,
+          menuId: m.menuId,
+          name: m.name,
+          code: m.code,
+          status: isOrdering ? 2 : 0,
+          alergens: m.alergens,
+          group: m.group,
+        );
+      }
+      return m;
+    }).toList();
+
+    Meals updatedMeals = Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
+
+    Day optimisticDay = Day(
+      date: currentDay.date,
+      capacity: currentDay.capacity,
+      eatery: currentDay.eatery,
+      meals: updatedMeals,
+      prices: currentDay.prices,
+    );
+
+    setState(() {
+      _loadedDays[currentDay.date] = optimisticDay;
+    });
+  }
+
 
   void _updateCredit(double amount) {
     setState(() {
@@ -264,16 +327,16 @@ class _OrderPageState extends State<OrderPage> {
         Expanded(
           child: meals.lunch.isEmpty
               ? Center(
-            child: Text(
-              "Žádná jídla k dispozici",
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          )
+                  child: Text(
+                    "Žádná jídla k dispozici",
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                )
               : ListView.builder(
-            itemCount: meals.lunch.length,
-            itemBuilder: (context, index) =>
-                _buildMealCard(meals.lunch[index], currentDay),
-          ),
+                  itemCount: meals.lunch.length,
+                  itemBuilder: (context, index) =>
+                      _buildMealCard(meals.lunch[index], currentDay),
+                ),
         ),
         const Divider(),
         _buildDayInfoRow(currentDay),
@@ -290,7 +353,8 @@ class _OrderPageState extends State<OrderPage> {
         children: [
           Expanded(
             child: Text(
-              '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}', // Use DateFormat
+              '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
+              // Use DateFormat
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
@@ -313,8 +377,9 @@ class _OrderPageState extends State<OrderPage> {
         title: Text(meal.name),
         subtitle: Text(meal.code),
         trailing: _buildMealTrailingIcon(meal, isTapped, meal.status),
-        onTap:
-        meal.status != -1 ? () => _handleMealTap(meal, currentDay, meal) : null,
+        onTap: meal.status != -1
+            ? () => _handleMealTap(meal, currentDay, meal)
+            : null,
       ),
     );
   }
@@ -346,11 +411,11 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Color _getMealStatusColor(int status) => switch (status) {
-    -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
-    0 => Theme.of(context).colorScheme.surfaceContainerHighest,
-    2 => Theme.of(context).colorScheme.primaryContainer,
-    _ => throw UnimplementedError(),
-  };
+        -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
+        0 => Theme.of(context).colorScheme.surfaceContainerHighest,
+        2 => Theme.of(context).colorScheme.primaryContainer,
+        _ => throw UnimplementedError(),
+      };
 
   Widget _buildEateriesDropdown(Day currentDay) {
     if (_facility == null || _facility!.eateries.isEmpty) {
@@ -358,16 +423,16 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     final currentEatery =
-    _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
+        _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
 
     return DropdownButton<String>(
       value: currentEatery.name,
       hint: const Text('Zvolit jídelnu'),
       items: _facility!.eateries
           .map((eatery) => DropdownMenuItem<String>(
-        value: eatery.name,
-        child: Text(eatery.name),
-      ))
+                value: eatery.name,
+                child: Text(eatery.name),
+              ))
           .toList(),
       onChanged: (String? newValue) {
         if (newValue == null) return;
@@ -411,8 +476,8 @@ class _OrderPageState extends State<OrderPage> {
     return ListTile(
       title: Text("${item.date} - ${DateFormat('EEEE').format(date)}"),
       tileColor: color,
-      subtitle: Text(
-          item.orders?.map((order) => order.name).join(', ') ?? 'Žádné objednávky'),
+      subtitle: Text(item.orders?.map((order) => order.name).join(', ') ??
+          'Žádné objednávky'),
       onTap: () {
         Navigator.pop(context);
         _pageController.jumpToPage(index);
@@ -421,37 +486,27 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   void _handlePageChange(int index) {
-    if (!mounted) return;
-    if (_facility == null || index >= _facility!.calendar.length) return;
-
-    final calendarItem = _facility!.calendar[index];
-    String eateryId = _facility!.eateries.first.id;
-
-    // Only fetch if we haven't loaded this day yet
-    if (!_loadedDays.containsKey(calendarItem.date)) {
-      // Try to use the same eatery as the previous day
-      if (_currentPageIndex < _facility!.calendar.length) {
-        final previousDate = _facility!.calendar[_currentPageIndex].date;
-        final previousDay = _loadedDays[previousDate];
-        if (previousDay != null) {
-          eateryId = previousDay.eatery;
-        }
-      }
-
-      _fetchDayData(eateryId, calendarItem.date);
-
-      setState(() {
-        _currentPageIndex = index;
-        _persistentPageIndex = index;
-        _mealTapped.clear();
-      });
+    if (!mounted || _facility == null || index >= _facility!.calendar.length) {
+      return;
     }
 
-    // Let's also check the next day
+    final calendarItem = _facility!.calendar[index];
+
+    if (!_loadedDays.containsKey(calendarItem.date)) {
+      String eateryId = _facility!.eateries.first.id;
+      _fetchDayData(eateryId, calendarItem.date);
+    }
+
+    setState(() {
+      _persistentPageIndex = index;
+      _mealTapped.clear();
+    });
+
+    // Preload the next day if not loaded
     if (index + 1 < _facility!.calendar.length &&
         !_loadedDays.containsKey(_facility!.calendar[index + 1].date)) {
       final nextDate = _facility!.calendar[index + 1].date;
-      _fetchDayData(eateryId, nextDate);
+      _fetchDayData(_facility!.eateries.first.id, nextDate);
     }
   }
 
