@@ -52,12 +52,15 @@ class _SettingsPageState extends State<SettingsPage> {
           .where((eatery) => eatery.id == widget.settingsNotifier.defaultEatery)
           .first;
 
+      if (!mounted) return;
       setState(() {
         _facilityName = eatery.name;
       });
     } catch (e) {
       // Handle error appropriately, e.g., show an error message
       print('Error loading facility: $e');
+
+      if (!mounted) return;
       setState(() {
         _facilityName = 'Chyba načítání'; // Display error message
       });
@@ -67,9 +70,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nastavení'),
-      ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
@@ -85,13 +85,41 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                description('Vyberte jídelnu, kterou používáte nejčastěji. Aplikace si ji zapamatuje a automaticky ji zobrazí jako první, takže nebudete muset pokaždé vybírat ručně.'),
+                description(
+                    'Vyberte jídelnu, kterou používáte nejčastěji. Aplikace si ji zapamatuje a automaticky ji zobrazí jako první, takže nebudete muset pokaždé vybírat ručně.'),
                 ListTile(
                   title: Text(_facilityName),
                   leading: const Icon(Icons.restaurant),
                   onTap: _showDefaultEateryDialog,
                 )
               ])),
+          Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'Víkendové obědy',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                description('Pokud objednáváte obědy i o víkendech, můžete si nechat zobrazit i nabídku na sobotu a neděli.'),
+                SwitchListTile(
+                  title: widget.settingsNotifier.showWeekends
+                      ? Text('Zobrazovat')
+                      : Text('Nezobrazovat'),
+                  value: widget.settingsNotifier.showWeekends,
+                  secondary: const Icon(Icons.calendar_today),
+                  onChanged: (bool value) {
+                    setState(() {
+                      widget.settingsNotifier.setShowWeekends(value);
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
           // Appearance
           Card(
             child: Column(
@@ -104,7 +132,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                description('Přizpůsobte si vzhled aplikace dle svých preferencí. Vyberte si mezi světlým, tmavým režimem a přizpůsobte si barevné schéma.'),
+                description(
+                    'Přizpůsobte si vzhled aplikace dle svých preferencí. Vyberte si mezi světlým, tmavým režimem a přizpůsobte si barevné schéma.'),
                 ListTile(
                   title: const Text('Světlý a tmavý vzhled'),
                   subtitle: Text(_getThemeText()),
@@ -120,7 +149,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
           Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,8 +306,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget description(String text) {
-    return Padding(padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
-      child: Text(text, style: const TextStyle(color: Colors.grey, fontSize: 13),),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0, left: 16.0, right: 16.0),
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.grey, fontSize: 13),
+      ),
     );
   }
 }

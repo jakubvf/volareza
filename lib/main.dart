@@ -50,10 +50,12 @@ class SettingsNotifier extends ChangeNotifier {
   static const String _themeModeKey = 'theme_mode';
   static const String _colorSeedKey = 'color_seed';
   static const String _defaultEateryKey = 'default_eatery';
+  static const String _showWeekendsKey = 'show_weekends';
 
   late ThemeMode _themeMode;
   late Color _colorSeed;
   late String? _defaultEatery;
+  late bool _showWeekends;
 
   final SharedPreferences _prefs;
 
@@ -62,6 +64,7 @@ class SettingsNotifier extends ChangeNotifier {
     _themeMode = ThemeMode.system;
     _colorSeed = Colors.deepPurple;
     _defaultEatery = null;
+    _showWeekends = false;
   }
 
   static Future<SettingsNotifier> create() async {
@@ -72,7 +75,6 @@ class SettingsNotifier extends ChangeNotifier {
   }
 
   Future<void> _loadPreferences() async {
-    // Load theme mode
     final themeModeString = _prefs.getString(_themeModeKey);
     if (themeModeString != null) {
       _themeMode = ThemeMode.values.firstWhere(
@@ -81,7 +83,6 @@ class SettingsNotifier extends ChangeNotifier {
       );
     }
 
-    // Load color seed
     final colorValue = _prefs.getInt(_colorSeedKey);
     if (colorValue != null) {
       _colorSeed = Color(colorValue);
@@ -91,11 +92,17 @@ class SettingsNotifier extends ChangeNotifier {
     if (defaultEatery != null) {
       _defaultEatery = defaultEatery;
     }
+
+    final showWeekends = _prefs.getBool(_showWeekendsKey);
+    if (showWeekends != null) {
+      _showWeekends = showWeekends;
+    }
   }
 
   ThemeMode get themeMode => _themeMode;
   Color get colorSeed => _colorSeed;
   String? get defaultEatery => _defaultEatery;
+  bool get showWeekends => _showWeekends;
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
@@ -112,6 +119,12 @@ class SettingsNotifier extends ChangeNotifier {
   Future<void> setDefaultEatery(String eatery) async {
     _defaultEatery = eatery;
     await _prefs.setString(_defaultEateryKey, eatery);
+    notifyListeners();
+  }
+
+  Future<void> setShowWeekends(bool showWeekends) async {
+    _showWeekends = showWeekends;
+    await _prefs.setBool(_showWeekendsKey, showWeekends);
     notifyListeners();
   }
 }

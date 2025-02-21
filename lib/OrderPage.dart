@@ -50,14 +50,42 @@ class _OrderPageState extends State<OrderPage> {
   /// Displays a loading indicator while doing work (mostly just waiting for network).
   bool _isLoading = true;
 
+  /// Whether to skip weekends in the calendar.
+  late final bool _showWeekends = widget.settingsNotifier.showWeekends;
+
+  /// Filtered calendar items that exclude weekends
+  List<CalendarItem> get _filteredCalendar => !_showWeekends && _facility != null
+      ? _facility!.calendar.where((item) {
+          final date = _parseDateTime(item.date);
+          return date.weekday < 6; // Monday to Friday
+        }).toList()
+      : _facility?.calendar ?? [];
+
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _persistentPageIndex);
+    _pageController = PageController(initialPage: _getInitialPageIndex());
     _login = widget.login;
     _currentCredit = double.parse(_login.credit);
 
     _initializeData();
+  }
+
+  int _getInitialPageIndex() {
+    if (_facility == null || _facility!.calendar.isEmpty) return 0;
+
+    if (_showWeekends) {
+      return _persistentPageIndex;
+    }
+
+    // Find the first non-weekend day
+    for (int i = 0; i < _facility!.calendar.length; i++) {
+      final date = _parseDateTime(_facility!.calendar[i].date);
+      if (date.weekday < 6) {
+        return i;
+      }
+    }
+    return 0; // Default to the first day
   }
 
   Future<void> _initializeData() async {
@@ -72,6 +100,7 @@ class _OrderPageState extends State<OrderPage> {
         }
       });
     } catch (error) {
+      if (!mounted) return;
       _handleError(error);
       setState(() => _isLoading = false);
     }
@@ -79,20 +108,28 @@ class _OrderPageState extends State<OrderPage> {
 
   Future<void> _preloadDataAroundIndex(int index) async {
     final calendar = _facility!.calendar;
-    final initialCalendarItem = calendar[index];
+    List<CalendarItem> calendarToUse =
+        _showWeekends ? calendar : _filteredCalendar;
+    if (calendarToUse.isEmpty) return;
+
+    if (index < 0 || index >= calendarToUse.length) {
+      return;
+    }
+
+    final initialCalendarItem = calendarToUse[index];
     String eateryId = _facility!.eateries.first.id;
 
     await _fetchDayData(eateryId, initialCalendarItem.date);
 
     // Preload the next day
-    if (index + 1 < calendar.length) {
-      final nextCalendarItem = calendar[index + 1];
+    if (index + 1 < calendarToUse.length) {
+      final nextCalendarItem = calendarToUse[index + 1];
       await _fetchDayData(eateryId, nextCalendarItem.date);
     }
 
     // Preload the previous day
     if (index - 1 >= 0) {
-      final prevCalendarItem = calendar[index - 1];
+      final prevCalendarItem = calendarToUse[index - 1];
       await _fetchDayData(eateryId, prevCalendarItem.date);
     }
   }
@@ -138,7 +175,7 @@ class _OrderPageState extends State<OrderPage> {
               suffix: ' Kč',
               textStyle: Theme.of(context).textTheme.titleMedium,
               duration: const Duration(milliseconds: 800),
-              decimals: 2,
+              decimals: 0,
             ),
           ],
         ),
@@ -240,7 +277,8 @@ class _OrderPageState extends State<OrderPage> {
       return m;
     }).toList();
 
-    Meals updatedMeals = Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
+    Meals updatedMeals =
+        Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
 
     Day optimisticDay = Day(
       date: currentDay.date,
@@ -254,7 +292,6 @@ class _OrderPageState extends State<OrderPage> {
       _loadedDays[currentDay.date] = optimisticDay;
     });
   }
-
 
   void _updateCredit(double amount) {
     setState(() {
@@ -303,12 +340,15 @@ class _OrderPageState extends State<OrderPage> {
       return const LoadingIndicator();
     }
 
+    List<CalendarItem> calendarToUse =
+    _showWeekends ?  _facility!.calendar : _filteredCalendar;
+
     return PageView.builder(
       controller: _pageController,
       onPageChanged: _handlePageChange,
-      itemCount: _facility!.calendar.length,
+      itemCount: calendarToUse.length,
       itemBuilder: (context, index) {
-        final calendarItem = _facility!.calendar[index];
+        final calendarItem = calendarToUse[index];
         final currentDay = _loadedDays[calendarItem.date];
 
         return currentDay != null
@@ -458,11 +498,14 @@ class _OrderPageState extends State<OrderPage> {
       );
     }
 
+    List<CalendarItem> calendarToUse =
+        _showWeekends ?  _facility!.calendar : _filteredCalendar;
+
     return Drawer(
       child: ListView.builder(
-        itemCount: _facility!.calendar.length,
+        itemCount: calendarToUse.length,
         itemBuilder: (context, index) =>
-            _buildCalendarTile(_facility!.calendar[index], index),
+            _buildCalendarTile(calendarToUse[index], index),
       ),
     );
   }
@@ -486,11 +529,16 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   void _handlePageChange(int index) {
-    if (!mounted || _facility == null || index >= _facility!.calendar.length) {
+    if (!mounted || _facility == null) {
       return;
     }
 
-    final calendarItem = _facility!.calendar[index];
+    List<CalendarItem> calendarToUse =
+    _showWeekends ?  _facility!.calendar : _filteredCalendar;
+
+    if (index < 0 || index >= calendarToUse.length) return;
+
+    final calendarItem = calendarToUse[index];
 
     if (!_loadedDays.containsKey(calendarItem.date)) {
       String eateryId = _facility!.eateries.first.id;
@@ -503,10 +551,11 @@ class _OrderPageState extends State<OrderPage> {
     });
 
     // Preload the next day if not loaded
-    if (index + 1 < _facility!.calendar.length &&
-        !_loadedDays.containsKey(_facility!.calendar[index + 1].date)) {
-      final nextDate = _facility!.calendar[index + 1].date;
-      _fetchDayData(_facility!.eateries.first.id, nextDate);
+    if (index + 1 < calendarToUse.length) {
+      final nextDateItem = calendarToUse[index + 1];
+      if (!_loadedDays.containsKey(nextDateItem.date)) {
+        _fetchDayData(_facility!.eateries.first.id, nextDateItem.date);
+      }
     }
   }
 
