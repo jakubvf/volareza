@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
 import 'package:volareza/main.dart';
 import 'ApiClient.dart';
+// import 'package:url_launcher/url_launcher.dart';
+// import 'package:url_launcher/url_launcher_string.dart';
 
 /// Handles user login. If the login is successful, the user is redirected to the [MainScreen].
 ///
@@ -11,8 +13,12 @@ import 'ApiClient.dart';
 ///
 /// The user can log out from the settings screen. See `autoLogin`.
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({
+    super.key,
+    this.autoLogin = true,
+    required this.settingsNotifier,
+  });
 
-  const LoginScreen({super.key, this.autoLogin = true, required this.settingsNotifier});
   /// `autoLogin` prevents loading credentials from secure storage.
   ///
   /// Used for logging out from the settings screen.
@@ -42,7 +48,8 @@ class _LoginScreenState extends State<LoginScreen> {
       ApiClient.initialize(_emailController.text, _passwordController.text);
 
       try {
-        final loginResult = await ApiClient.instance.login(); // Call the async login method
+        final loginResult =
+        await ApiClient.instance.login(); // Call the async login method
 
         setState(() {
           _isLoading = false;
@@ -56,20 +63,22 @@ class _LoginScreenState extends State<LoginScreen> {
               key: 'password', value: _passwordController.text);
         }
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MainScreen(login: loginResult, settingsNotifier: widget.settingsNotifier,)),
-          );
-
-
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (context) => MainScreen(
+                login: loginResult,
+                settingsNotifier: widget.settingsNotifier,
+              )),
+        );
       } on ApiException catch (e) {
         // Handle API-specific errors
         setState(() {
           _isLoading = false;
         });
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Přihlášení se nezdařilo: ${e.message}')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Přihlášení se nezdařilo: ${e.message}')));
         }
       } catch (e) {
         // Handle other unexpected errors
@@ -77,14 +86,15 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoading = false;
         });
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Přihlášení se nezdařilo: ${e.toString()}')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Přihlášení se nezdařilo: ${e.toString()}')));
         }
       }
     }
   }
 
-  @override @override
+  @override
+  @override
   void initState() {
     super.initState();
     // tries to load credentials from storage
@@ -104,48 +114,110 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Login'),
+        title: Text('Přihlášení'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Doplňte email';
-                  }
-                  return null;
-                },
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              isDarkTheme ? 'assets/volareza-dark.png' : 'assets/volareza.png',
+              height: 100,
+            ),
+            Spacer(),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(labelText: 'Email'),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Doplňte email';
+                          }
+                          return null;
+                        },
+                      ),
+                      TextFormField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(labelText: 'Heslo'),
+                        obscureText: true,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Doplňte heslo';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: 20),
+                      _isLoading
+                          ? CircularProgressIndicator()
+                          : ElevatedButton(
+                        autofocus: true,
+                        onPressed: _submit,
+                        child: Text('Přihlásit se'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              TextFormField(
-                controller: _passwordController,
-                decoration: InputDecoration(labelText: 'Heslo'),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Doplňte heslo';
-                  }
-                  return null;
-                },
+            ),
+            Spacer(),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                children: [
+                  Text(
+                    'Nemáte účet?',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 4),
+                  InkWell(
+                    child: Text(
+                      'Registrovat se můžete zde',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    onTap: () async {
+                      final Uri url =
+                      Uri.parse('https://jidelny-vlrz.cz/login/');
+                      // if (!await launchUrl(url)) {
+                      //   throw Exception('Could not launch $url');
+                      // }
+                    },
+                  ),
+                  SizedBox(height: 48),
+                  Text(
+                    'Aplikaci vyvinula Katedra informatiky a kybernetických operací (K-209)',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  Image.asset(
+                    'assets/Logo_of_UO.png',
+                    height: 40,
+                  ),
+                  const Text(
+                    'Univerzita obrany',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
               ),
-              SizedBox(height: 20),
-              _isLoading
-                  ? CircularProgressIndicator()
-                  : ElevatedButton(
-                autofocus: true,
-                onPressed: _submit,
-                child: Text('Přihlásit se'),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

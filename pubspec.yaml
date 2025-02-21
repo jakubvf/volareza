@@ -67,6 +67,7 @@ flutter:
   assets:
     - assets/volareza.png
     - assets/volareza-dark.png
+    - assets/Logo_of_UO.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
