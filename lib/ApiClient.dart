@@ -58,6 +58,8 @@ class ApiClient {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         try {
+          final utf8str = utf8.decode(response.bodyBytes);
+          print(utf8str);
           final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
           return decodedBody;
         } catch (e) {
@@ -132,13 +134,26 @@ class ApiClient {
     await _makeRequest(path: '/service/', req: 'order', data: data);
   }
 
-  Future<void> cancelOrder(String date, String eatery) async {
+  Future<bool> cancelOrder(String date, String eatery) async {
     final data = {
       'date': date,
       'eatery': eatery,
       'mealTp': "O", // we only support ordering for lunch
     };
-    await _makeRequest(path: '/service/', req: 'cancelOrder', data: data);
+    final result = await _makeRequest(path: '/service/', req: 'cancelOrder', data: data);
+
+    // This is my way of figuring out if the result was an error. I know not ideal.
+    return !result.containsKey('severity');
+  }
+
+  Future<void> exchange(String date, String eatery, bool exchange, {mealType = "O"}) async {
+    final data = {
+      'exchange': exchange,
+      'date': date,
+      'eatery': eatery,
+      'mealTp': mealType,
+    };
+    await _makeRequest(path: '/service/', req: 'exchange', data: data);
   }
 }
 

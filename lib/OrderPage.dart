@@ -54,12 +54,13 @@ class _OrderPageState extends State<OrderPage> {
   late final bool _showWeekends = widget.settingsNotifier.showWeekends;
 
   /// Filtered calendar items that exclude weekends
-  List<CalendarItem> get _filteredCalendar => !_showWeekends && _facility != null
-      ? _facility!.calendar.where((item) {
-          final date = _parseDateTime(item.date);
-          return date.weekday < 6; // Monday to Friday
-        }).toList()
-      : _facility?.calendar ?? [];
+  List<CalendarItem> get _filteredCalendar =>
+      !_showWeekends && _facility != null
+          ? _facility!.calendar.where((item) {
+              final date = _parseDateTime(item.date);
+              return date.weekday < 6; // Monday to Friday
+            }).toList()
+          : _facility?.calendar ?? [];
 
   @override
   void initState() {
@@ -231,13 +232,17 @@ class _OrderPageState extends State<OrderPage> {
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
     _optimisticUpdate(currentDay, meal, true);
-
     _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
 
     try {
-      await ApiClient.instance
-          .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
-
+      if (meal.status == 4 || meal.status == 3) {
+        _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
+        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, false);
+      }
+      else {
+        await ApiClient.instance
+            .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
+      }
       if (!mounted) return;
       _refreshData(currentDay);
     } catch (e) {
@@ -250,7 +255,12 @@ class _OrderPageState extends State<OrderPage> {
     _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
 
     try {
-      await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
+      final succeeded = await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
+      // if order cancellation fails, try to exchange the meal
+      if (!succeeded){
+        _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
+        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, true);
+      }
 
       if (!mounted) return;
       _refreshData(currentDay);
@@ -341,7 +351,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-    _showWeekends ? _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return PageView.builder(
       controller: _pageController,
@@ -392,23 +402,32 @@ class _OrderPageState extends State<OrderPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          IconButton(onPressed: () => {
-            setState(() {
-              _pageController.previousPage(duration: Duration(milliseconds: 300), curve: Curves.fastEaseInToSlowEaseOut);
-            })
-          }, icon: Icon(Icons.arrow_back)),
+          IconButton(
+              onPressed: () => {
+                    setState(() {
+                      _pageController.previousPage(
+                          duration: Duration(milliseconds: 300),
+                          curve: Curves.fastEaseInToSlowEaseOut);
+                    })
+                  },
+              icon: Icon(Icons.arrow_back)),
           Expanded(
-            child: Center(child: Text(
+            child: Center(
+                child: Text(
               '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
               // Use DateFormat
               style: Theme.of(context).textTheme.titleMedium,
             )),
           ),
-          IconButton(onPressed: () => {
-            setState(() {
-              _pageController.nextPage(duration: Duration(milliseconds: 300), curve: Curves.fastEaseInToSlowEaseOut);
-            })
-          }, icon: Icon(Icons.arrow_forward)),
+          IconButton(
+              onPressed: () => {
+                    setState(() {
+                      _pageController.nextPage(
+                          duration: Duration(milliseconds: 300),
+                          curve: Curves.fastEaseInToSlowEaseOut);
+                    })
+                  },
+              icon: Icon(Icons.arrow_forward)),
         ],
       ),
     );
@@ -460,12 +479,18 @@ class _OrderPageState extends State<OrderPage> {
     }
   }
 
-  Color _getMealStatusColor(int status) => switch (status) {
-        -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
-        0 => Theme.of(context).colorScheme.surfaceContainerHighest,
-        2 => Theme.of(context).colorScheme.primaryContainer,
-        _ => throw UnimplementedError(),
-      };
+  Color _getMealStatusColor(int status) {
+    return switch (status) {
+      -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
+      0 => Theme.of(context).colorScheme.surfaceContainerHighest,
+      2 => Theme.of(context).colorScheme.primaryContainer,
+      // 3 => moje jidlo vlozene do burzy
+      3 => Theme.of(context).colorScheme.tertiaryContainer,
+      // 4 => jidlo dostupne v burze
+      4 => Theme.of(context).colorScheme.tertiaryContainer,
+      _ => throw UnimplementedError(),
+    };
+  }
 
   Widget _buildEateriesDropdown(Day currentDay) {
     if (_facility == null || _facility!.eateries.isEmpty) {
@@ -509,7 +534,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ?  _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return Drawer(
       child: ListView.builder(
@@ -544,7 +569,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-    _showWeekends ?  _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     if (index < 0 || index >= calendarToUse.length) return;
 

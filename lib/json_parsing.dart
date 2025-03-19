@@ -102,7 +102,7 @@ class Meal {
   final String code;
   final String name;
   final String alergens;
-  /// -1 => not available, 0 => available, 2 => ordered
+  /// -1 => not available, 0 => available, 2 => ordered, 3 => my meal in exchange, 4 => someone else's food in exchange
   final int status;
   final int group;
 
