@@ -58,8 +58,6 @@ class ApiClient {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         try {
-          final utf8str = utf8.decode(response.bodyBytes);
-          print(utf8str);
           final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
           return decodedBody;
         } catch (e) {

@@ -260,6 +260,8 @@ class _OrderPageState extends State<OrderPage> {
       if (!succeeded){
         _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
         await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, true);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Jídlo vloženo do burzy.')));
       }
 
       if (!mounted) return;
