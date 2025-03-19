@@ -341,7 +341,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-    _showWeekends ?  _facility!.calendar : _filteredCalendar;
+    _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return PageView.builder(
       controller: _pageController,
@@ -364,6 +364,7 @@ class _OrderPageState extends State<OrderPage> {
     return Column(
       children: [
         const Padding(padding: EdgeInsets.only(top: 16)),
+        _buildDayInfoRow(currentDay),
         Expanded(
           child: meals.lunch.isEmpty
               ? Center(
@@ -379,7 +380,7 @@ class _OrderPageState extends State<OrderPage> {
                 ),
         ),
         const Divider(),
-        _buildDayInfoRow(currentDay),
+        _buildEateriesDropdown(currentDay),
         const Padding(padding: EdgeInsets.only(bottom: 12)),
       ],
     );
@@ -391,14 +392,23 @@ class _OrderPageState extends State<OrderPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          IconButton(onPressed: () => {
+            setState(() {
+              _pageController.previousPage(duration: Duration(milliseconds: 300), curve: Curves.fastEaseInToSlowEaseOut);
+            })
+          }, icon: Icon(Icons.arrow_back)),
           Expanded(
-            child: Text(
+            child: Center(child: Text(
               '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
               // Use DateFormat
               style: Theme.of(context).textTheme.titleMedium,
-            ),
+            )),
           ),
-          _buildEateriesDropdown(currentDay),
+          IconButton(onPressed: () => {
+            setState(() {
+              _pageController.nextPage(duration: Duration(milliseconds: 300), curve: Curves.fastEaseInToSlowEaseOut);
+            })
+          }, icon: Icon(Icons.arrow_forward)),
         ],
       ),
     );

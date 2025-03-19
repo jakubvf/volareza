@@ -141,6 +141,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(labelText: 'Email'),
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: [AutofillHints.email],
+                        textInputAction: TextInputAction.next,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Doplňte email';
@@ -152,6 +155,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _passwordController,
                         decoration: InputDecoration(labelText: 'Heslo'),
                         obscureText: true,
+                        enableSuggestions: false,
+                        autofillHints: [AutofillHints.password],
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Doplňte heslo';
@@ -172,7 +177,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            Spacer(),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Column(
@@ -201,22 +205,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       // }
                     },
                   ),
-                  SizedBox(height: 48),
-                  Text(
-                    'Aplikaci vyvinula Katedra informatiky a kybernetických operací (K-209)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  Image.asset(
-                    'assets/Logo_of_UO.png',
-                    height: 40,
-                  ),
-                  const Text(
-                    'Univerzita obrany',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
                 ],
               ),
             ),
+            Spacer(),
           ],
         ),
       ),
