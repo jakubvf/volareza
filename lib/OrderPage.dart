@@ -57,9 +57,9 @@ class _OrderPageState extends State<OrderPage> {
   List<CalendarItem> get _filteredCalendar =>
       !_showWeekends && _facility != null
           ? _facility!.calendar.where((item) {
-              final date = _parseDateTime(item.date);
-              return date.weekday < 6; // Monday to Friday
-            }).toList()
+        final date = _parseDateTime(item.date);
+        return date.weekday < 6; // Monday to Friday
+      }).toList()
           : _facility?.calendar ?? [];
 
   @override
@@ -110,7 +110,7 @@ class _OrderPageState extends State<OrderPage> {
   Future<void> _preloadDataAroundIndex(int index) async {
     final calendar = _facility!.calendar;
     List<CalendarItem> calendarToUse =
-        _showWeekends ? calendar : _filteredCalendar;
+    _showWeekends ? calendar : _filteredCalendar;
     if (calendarToUse.isEmpty) return;
 
     if (index < 0 || index >= calendarToUse.length) {
@@ -118,22 +118,51 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     final initialCalendarItem = calendarToUse[index];
-    String eateryId = _facility!.eateries.first.id;
 
-    await _fetchDayData(eateryId, initialCalendarItem.date);
+    // preload current day
+        {
+      final eateryId = _figureOutEateryOfCalendarItem(initialCalendarItem);
+      if (eateryId == null) {
+        _handleError('Chyba při načítání jídelny');
+        return;
+      }
+      await _fetchDayData(eateryId, initialCalendarItem.date);
+    }
 
     // Preload the next day
     if (index + 1 < calendarToUse.length) {
       final nextCalendarItem = calendarToUse[index + 1];
+      final eateryId = _figureOutEateryOfCalendarItem(nextCalendarItem);
+      if (eateryId == null) {
+        _handleError('Chyba při načítání jídelny');
+        return;
+      }
       await _fetchDayData(eateryId, nextCalendarItem.date);
     }
 
     // Preload the previous day
     if (index - 1 >= 0) {
       final prevCalendarItem = calendarToUse[index - 1];
+      final eateryId = _figureOutEateryOfCalendarItem(prevCalendarItem);
+      if (eateryId == null) {
+        _handleError('Chyba při načítání jídelny');
+        return;
+      }
       await _fetchDayData(eateryId, prevCalendarItem.date);
     }
   }
+
+  String? _figureOutEateryOfCalendarItem(CalendarItem item) {
+    final eateryFromOrder = item.orders?.firstOrNull?.eatery;
+    if (eateryFromOrder != null) return eateryFromOrder;
+
+    final defaultEatery = widget.settingsNotifier.defaultEatery;
+    if (defaultEatery != null) return defaultEatery;
+
+    final fallbackEatery = _facility?.eateries.first.id;
+    return fallbackEatery is String ? fallbackEatery : null;
+  }
+
 
   @override
   void dispose() {
@@ -237,9 +266,9 @@ class _OrderPageState extends State<OrderPage> {
     try {
       if (meal.status == 4 || meal.status == 3) {
         _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, false);
-      }
-      else {
+        await ApiClient.instance
+            .exchange(currentDay.date, currentDay.eatery, false);
+      } else {
         await ApiClient.instance
             .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
       }
@@ -255,13 +284,15 @@ class _OrderPageState extends State<OrderPage> {
     _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
 
     try {
-      final succeeded = await ApiClient.instance.cancelOrder(currentDay.date, currentDay.eatery);
+      final succeeded = await ApiClient.instance
+          .cancelOrder(currentDay.date, currentDay.eatery);
       // if order cancellation fails, try to exchange the meal
-      if (!succeeded){
+      if (!succeeded) {
         _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, true);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Jídlo vloženo do burzy.')));
+        await ApiClient.instance
+            .exchange(currentDay.date, currentDay.eatery, true);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Jídlo vloženo do burzy.')));
       }
 
       if (!mounted) return;
@@ -290,7 +321,7 @@ class _OrderPageState extends State<OrderPage> {
     }).toList();
 
     Meals updatedMeals =
-        Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
+    Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
 
     Day optimisticDay = Day(
       date: currentDay.date,
@@ -353,7 +384,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ? _facility!.calendar : _filteredCalendar;
+    _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return PageView.builder(
       controller: _pageController,
@@ -380,16 +411,16 @@ class _OrderPageState extends State<OrderPage> {
         Expanded(
           child: meals.lunch.isEmpty
               ? Center(
-                  child: Text(
-                    "Žádná jídla k dispozici",
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                )
+            child: Text(
+              "Žádná jídla k dispozici",
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          )
               : ListView.builder(
-                  itemCount: meals.lunch.length,
-                  itemBuilder: (context, index) =>
-                      _buildMealCard(meals.lunch[index], currentDay),
-                ),
+            itemCount: meals.lunch.length,
+            itemBuilder: (context, index) =>
+                _buildMealCard(meals.lunch[index], currentDay),
+          ),
         ),
         const Divider(),
         _buildEateriesDropdown(currentDay),
@@ -406,29 +437,29 @@ class _OrderPageState extends State<OrderPage> {
         children: [
           IconButton(
               onPressed: () => {
-                    setState(() {
-                      _pageController.previousPage(
-                          duration: Duration(milliseconds: 300),
-                          curve: Curves.fastEaseInToSlowEaseOut);
-                    })
-                  },
+                setState(() {
+                  _pageController.previousPage(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.fastEaseInToSlowEaseOut);
+                })
+              },
               icon: Icon(Icons.arrow_back)),
           Expanded(
             child: Center(
                 child: Text(
-              '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
-              // Use DateFormat
-              style: Theme.of(context).textTheme.titleMedium,
-            )),
+                  '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
+                  // Use DateFormat
+                  style: Theme.of(context).textTheme.titleMedium,
+                )),
           ),
           IconButton(
               onPressed: () => {
-                    setState(() {
-                      _pageController.nextPage(
-                          duration: Duration(milliseconds: 300),
-                          curve: Curves.fastEaseInToSlowEaseOut);
-                    })
-                  },
+                setState(() {
+                  _pageController.nextPage(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.fastEaseInToSlowEaseOut);
+                })
+              },
               icon: Icon(Icons.arrow_forward)),
         ],
       ),
@@ -486,9 +517,9 @@ class _OrderPageState extends State<OrderPage> {
       -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
       0 => Theme.of(context).colorScheme.surfaceContainerHighest,
       2 => Theme.of(context).colorScheme.primaryContainer,
-      // 3 => moje jidlo vlozene do burzy
+    // 3 => moje jidlo vlozene do burzy
       3 => Theme.of(context).colorScheme.tertiaryContainer,
-      // 4 => jidlo dostupne v burze
+    // 4 => jidlo dostupne v burze
       4 => Theme.of(context).colorScheme.tertiaryContainer,
       _ => throw UnimplementedError(),
     };
@@ -500,16 +531,16 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     final currentEatery =
-        _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
+    _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
 
     return DropdownButton<String>(
       value: currentEatery.name,
       hint: const Text('Zvolit jídelnu'),
       items: _facility!.eateries
           .map((eatery) => DropdownMenuItem<String>(
-                value: eatery.name,
-                child: Text(eatery.name),
-              ))
+        value: eatery.name,
+        child: Text(eatery.name),
+      ))
           .toList(),
       onChanged: (String? newValue) {
         if (newValue == null) return;
@@ -536,7 +567,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ? _facility!.calendar : _filteredCalendar;
+    _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return Drawer(
       child: ListView.builder(
@@ -571,14 +602,18 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ? _facility!.calendar : _filteredCalendar;
+    _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     if (index < 0 || index >= calendarToUse.length) return;
 
     final calendarItem = calendarToUse[index];
 
     if (!_loadedDays.containsKey(calendarItem.date)) {
-      String eateryId = _facility!.eateries.first.id;
+      String? eateryId = _figureOutEateryOfCalendarItem(calendarItem);
+      if (eateryId == null) {
+        _handleError('Chyba při načítání jídelny');
+        return;
+      }
       _fetchDayData(eateryId, calendarItem.date);
     }
 
@@ -591,7 +626,13 @@ class _OrderPageState extends State<OrderPage> {
     if (index + 1 < calendarToUse.length) {
       final nextDateItem = calendarToUse[index + 1];
       if (!_loadedDays.containsKey(nextDateItem.date)) {
-        _fetchDayData(_facility!.eateries.first.id, nextDateItem.date);
+        String? eateryId = _figureOutEateryOfCalendarItem(calendarItem);
+        if (eateryId == null) {
+          _handleError('Chyba při načítání jídelny');
+          return;
+        }
+
+        _fetchDayData(eateryId, nextDateItem.date);
       }
     }
   }
