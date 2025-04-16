@@ -23,8 +23,11 @@ class _OrderPageState extends State<OrderPage> {
   /// Stores the tapped meals. Used for ordering.
   final Map<String, bool> _mealTapped = {};
 
-  /// Stores the days that have been loaded. Duh.
+  /// Stores days that have been loaded. Duh.
   final Map<String, Day> _loadedDays = {};
+
+  /// Stores days that have been modified due to optimistic updates.
+  final Map<String, Day> _optimisticDays = {};
 
   Facility? _facility;
 
@@ -118,37 +121,18 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     final initialCalendarItem = calendarToUse[index];
-
-    // preload current day
-        {
-      final eateryId = _figureOutEateryOfCalendarItem(initialCalendarItem);
-      if (eateryId == null) {
-        _handleError('Chyba při načítání jídelny');
-        return;
-      }
-      await _fetchDayData(eateryId, initialCalendarItem.date);
-    }
+    _ensureDayLoaded(initialCalendarItem);
 
     // Preload the next day
     if (index + 1 < calendarToUse.length) {
       final nextCalendarItem = calendarToUse[index + 1];
-      final eateryId = _figureOutEateryOfCalendarItem(nextCalendarItem);
-      if (eateryId == null) {
-        _handleError('Chyba při načítání jídelny');
-        return;
-      }
-      await _fetchDayData(eateryId, nextCalendarItem.date);
+      _ensureDayLoaded(nextCalendarItem);
     }
 
     // Preload the previous day
     if (index - 1 >= 0) {
       final prevCalendarItem = calendarToUse[index - 1];
-      final eateryId = _figureOutEateryOfCalendarItem(prevCalendarItem);
-      if (eateryId == null) {
-        _handleError('Chyba při načítání jídelny');
-        return;
-      }
-      await _fetchDayData(eateryId, prevCalendarItem.date);
+      _ensureDayLoaded(prevCalendarItem);
     }
   }
 
@@ -213,6 +197,39 @@ class _OrderPageState extends State<OrderPage> {
     );
   }
 
+  Future<void> _ensureDayLoaded(CalendarItem item, {bool allowOptimistic = true}) async {
+    final date = item.date;
+
+    // If we already have an optimistic version, respect it
+    if (allowOptimistic && _optimisticDays.containsKey(date)) return;
+
+    // If already loaded from API, no need to fetch again
+    if (_loadedDays.containsKey(date)) return;
+
+    final eateryId = _figureOutEateryOfCalendarItem(item);
+    if (eateryId == null) {
+      _handleError('Chyba při načítání jídelny');
+      return;
+    }
+
+    try {
+      final day = await ApiClient.instance.getDay(eateryId, date);
+      if (!mounted) return;
+
+      setState(() {
+        _loadedDays[date] = day;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      _handleError(e);
+    }
+  }
+
+  Day? getDayFromDate(CalendarItem calendarItem) {
+    return _optimisticDays[calendarItem.date] ?? _loadedDays[calendarItem.date];
+  }
+
+
   Future<void> _fetchFacilityData() async {
     if (!mounted) return;
 
@@ -260,53 +277,64 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
-    _optimisticUpdate(currentDay, meal, true);
-    _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
+    final optimisticDay = _createOptimisticDay(currentDay, meal, isOrdering: true);
+    setState(() {
+      _optimisticDays[currentDay.date] = optimisticDay;
+      _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
+    });
 
     try {
       if (meal.status == 4 || meal.status == 3) {
         _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance
-            .exchange(currentDay.date, currentDay.eatery, false);
+        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, false);
       } else {
-        await ApiClient.instance
-            .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
+        await ApiClient.instance.order(
+          currentDay.date,
+          currentDay.eatery,
+          meal.id,
+          meal.menuId,
+        );
       }
+
       if (!mounted) return;
-      _refreshData(currentDay);
+      await _refreshDayData(currentDay);
     } catch (e) {
       _handleError(e);
     }
   }
+
 
   Future<void> _handleCancelOrder(Day currentDay, Meal meal) async {
-    _optimisticUpdate(currentDay, meal, false);
-    _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
+    final optimisticDay = _createOptimisticDay(currentDay, meal, isOrdering: false);
+    setState(() {
+      _optimisticDays[currentDay.date] = optimisticDay;
+      _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
+    });
 
     try {
-      final succeeded = await ApiClient.instance
-          .cancelOrder(currentDay.date, currentDay.eatery);
-      // if order cancellation fails, try to exchange the meal
+      final succeeded = await ApiClient.instance.cancelOrder(
+        currentDay.date,
+        currentDay.eatery,
+      );
+
       if (!succeeded) {
         _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance
-            .exchange(currentDay.date, currentDay.eatery, true);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Jídlo vloženo do burzy.')));
+        await ApiClient.instance.exchange(currentDay.date, currentDay.eatery, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Jídlo vloženo do burzy.')),
+        );
       }
 
       if (!mounted) return;
-      _refreshData(currentDay);
+      await _refreshDayData(currentDay);
     } catch (e) {
       _handleError(e);
     }
   }
 
-  void _optimisticUpdate(Day currentDay, Meal meal, bool isOrdering) {
-    // Optimistic update to skip UI delays
-    List<Meal> updatedLunchMeals = currentDay.meals.lunch.map((m) {
+  Day _createOptimisticDay(Day currentDay, Meal meal, {required bool isOrdering}) {
+    final updatedLunchMeals = currentDay.meals.lunch.map((m) {
       if (m.id == meal.id) {
-        // Create a copy of the meal with the updated status
         return Meal(
           id: m.id,
           menuId: m.menuId,
@@ -320,34 +348,39 @@ class _OrderPageState extends State<OrderPage> {
       return m;
     }).toList();
 
-    Meals updatedMeals =
-    Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
-
-    Day optimisticDay = Day(
+    return Day(
       date: currentDay.date,
       capacity: currentDay.capacity,
       eatery: currentDay.eatery,
-      meals: updatedMeals,
+      meals: Meals(
+        lunch: updatedLunchMeals,
+        breakfast: [], // or currentDay.meals.breakfast if needed
+        dinner: [],    // same here
+      ),
       prices: currentDay.prices,
     );
-
-    setState(() {
-      _loadedDays[currentDay.date] = optimisticDay;
-    });
   }
 
-  void _updateCredit(double amount) {
-    setState(() {
-      _mealTapped.clear();
-      _previousCredit = _currentCredit;
-      _currentCredit += amount;
-    });
+  Future<void> _refreshDayData(Day currentDay) async {
+    final date = currentDay.date;
+    final eatery = currentDay.eatery;
+
+    try {
+      final day = await ApiClient.instance.getDay(eatery, date);
+      if (!mounted) return;
+
+      setState(() {
+        _loadedDays[date] = day;
+        _optimisticDays.remove(date);
+      });
+
+      await _fetchFacilityData();
+    } catch (e) {
+      if (!mounted) return;
+      _handleError(e);
+    }
   }
 
-  Future<void> _refreshData(Day currentDay) async {
-    await _fetchDayData(currentDay.eatery, currentDay.date);
-    await _fetchFacilityData();
-  }
 
   void _handleError(dynamic error) {
     final errorMessage = error.toString();
@@ -392,11 +425,11 @@ class _OrderPageState extends State<OrderPage> {
       itemCount: calendarToUse.length,
       itemBuilder: (context, index) {
         final calendarItem = calendarToUse[index];
-        final currentDay = _loadedDays[calendarItem.date];
+        final currentDay = getDayFromDate(calendarItem);
 
         return currentDay != null
             ? _buildDayContent(currentDay)
-            : const LoadingIndicator(); // Consider showing loading here too
+            : const LoadingIndicator();
       },
     );
   }
@@ -554,7 +587,12 @@ class _OrderPageState extends State<OrderPage> {
           currentDay.eatery = newEatery;
         });
 
+        // Clear any optimistic state for this day
+        _optimisticDays.remove(currentDay.date);
+
+        // Fetch day data for the newly selected eatery
         _fetchDayData(newEatery, currentDay.date);
+
       },
     );
   }
@@ -607,15 +645,7 @@ class _OrderPageState extends State<OrderPage> {
     if (index < 0 || index >= calendarToUse.length) return;
 
     final calendarItem = calendarToUse[index];
-
-    if (!_loadedDays.containsKey(calendarItem.date)) {
-      String? eateryId = _figureOutEateryOfCalendarItem(calendarItem);
-      if (eateryId == null) {
-        _handleError('Chyba při načítání jídelny');
-        return;
-      }
-      _fetchDayData(eateryId, calendarItem.date);
-    }
+    _ensureDayLoaded(calendarItem);
 
     setState(() {
       _persistentPageIndex = index;
@@ -625,15 +655,7 @@ class _OrderPageState extends State<OrderPage> {
     // Preload the next day if not loaded
     if (index + 1 < calendarToUse.length) {
       final nextDateItem = calendarToUse[index + 1];
-      if (!_loadedDays.containsKey(nextDateItem.date)) {
-        String? eateryId = _figureOutEateryOfCalendarItem(calendarItem);
-        if (eateryId == null) {
-          _handleError('Chyba při načítání jídelny');
-          return;
-        }
-
-        _fetchDayData(eateryId, nextDateItem.date);
-      }
+      _ensureDayLoaded(nextDateItem);
     }
   }
 
@@ -649,7 +671,15 @@ class _OrderPageState extends State<OrderPage> {
     }
     return Theme.of(context).colorScheme.errorContainer.withAlpha(200);
   }
+
+  void _updateCredit(double difference) {
+    setState(() {
+      _previousCredit = _currentCredit;
+      _currentCredit = _previousCredit + difference;
+    });
+  }
 }
+
 
 DateTime _parseDateTime(String date) {
   try {
