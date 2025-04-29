@@ -1,24 +1,14 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:volareza/models/menu.dart';
 
-import 'json_parsing.dart';
+import 'models/facility.dart';
+import 'models/login.dart';
 
-
-/// A singleton class that handles all API requests.
 class ApiClient {
-  final String username;
-  final String password;
   final String baseUrl = 'https://unob.jidelny-vlrz.cz';
   String? phpSessionIdCookie = '';
-
-  ApiClient._internal(this.username, this.password);
-
-  static late ApiClient instance;
-
-  static Future<void> initialize(String username, String password) async {
-    instance = ApiClient._internal(username, password);
-  }
 
   static String hashPassword(String input) {
     List<int> bytes = utf8.encode(input);
@@ -26,7 +16,7 @@ class ApiClient {
     return digest.toString();
   }
 
-  // Generic Request Method (Internal)
+  // Generic Request Method
   Future<dynamic> _makeRequest({
     required String path,
     required String req,
@@ -74,7 +64,7 @@ class ApiClient {
 
   // API Methods
 
-  Future<Login> login() async {
+  Future<Login> login(String username, String password) async {
     final data = {
       'facId': '10',
       'userNm': username,
@@ -91,15 +81,16 @@ class ApiClient {
     return Facility.fromJson(response['data']);
   }
 
-  Future<Day> getDay(String preferredEatery, String date) async {
+  Future<Menu> getMenuForDate(String preferredEatery, String date) async {
     final data = {
       'eatery': preferredEatery,
       'date': date,
     };
     final response = await _makeRequest(path: '/service/', req: 'facility', data: data);
-    return Day.fromJson(response['data'], date);
+    return Menu.fromJson(response['data'], date);
   }
 
+  /// Unused, here for reference
   Future<void> selectMeal(String date, String eatery, String mealType, String mealId, String menuId) async {
     final data = {
       'mealSel': [

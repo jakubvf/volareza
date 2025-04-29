@@ -28,7 +28,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   ListTile(
                     title: Text('Email'),
-                    subtitle: Text(login.userNm),
+                    subtitle: Text(login.userName),
                   ),
                   ListTile(
                     title: Text('Kredit'),
@@ -36,7 +36,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   ListTile(
                     title: Text('Stravovací zařízení'),
-                    subtitle: Text(login.facNm),
+                    subtitle: Text(login.facilityName),
                   ),
                 ],
               ),

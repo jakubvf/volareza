@@ -250,14 +250,6 @@ class _OrderPageState extends State<OrderPage> {
     }
   }
 
-  double _figureOutPriceForAMeal(Day currentDay, Meal meal) {
-    // I know this is stupid, but I don't know how to do it better
-    if (meal.code.contains("5")) {
-      return double.parse(currentDay.prices.lunch[1]['price']);
-    } else {
-      return double.parse(currentDay.prices.lunch[0]['price']);
-    }
-  }
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
     _optimisticUpdate(currentDay, meal, true);
