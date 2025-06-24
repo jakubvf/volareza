@@ -5,6 +5,7 @@ import 'OrderPage.dart';
 import 'ProfilePage.dart';
 import 'SettingsPage.dart';
 import 'VolarezaService.dart';
+import 'timetable.dart';
 
 class MainScreen extends StatefulWidget {
   final Login login;
@@ -25,6 +26,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _pages = [
       OrderPage(login: widget.login, volarezaService: widget.volarezaService),
+      TimetablePage(),
       const SettingsPage(),
       ProfilePage(login: widget.login),
     ];
@@ -44,10 +46,15 @@ class _MainScreenState extends State<MainScreen> {
           child: _pages.elementAt(_selectedPageIndex),
         ),
         BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
           items: const <BottomNavigationBarItem>[
             BottomNavigationBarItem(
               icon: Icon(Icons.restaurant_menu),
               label: 'Objednávky',
+            ),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_month),
+                label: 'Rozvrh'
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings),

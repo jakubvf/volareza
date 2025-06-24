@@ -2,21 +2,30 @@ import 'package:flutter/material.dart';
 
 import 'LoginScreen.dart';
 import 'settings/settings_provider.dart';
+import 'database.dart';
+import 'database_provider.dart';
 
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(const MyApp());
+  final database = AppDatabase();
+
+  runApp(MyApp(database: database));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.database});
+
+  final AppDatabase database;
 
   @override
   Widget build(BuildContext context) {
-    return SettingsProvider(
-      child: const _MaterialAppWithSettings(),
+    return DatabaseProvider(
+      database: database,
+      child: const SettingsProvider(
+        child: _MaterialAppWithSettings(),
+      ),
     );
   }
 }
@@ -44,5 +53,3 @@ class _MaterialAppWithSettings extends StatelessWidget {
     );
   }
 }
-
-
