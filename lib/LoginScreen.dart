@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
-import 'package:volareza/main.dart';
 import 'ApiClient.dart';
 import 'VolarezaService.dart';
 // import 'package:url_launcher/url_launcher.dart';
@@ -17,14 +16,12 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     this.autoLogin = true,
-    required this.settingsNotifier,
   });
 
   /// `autoLogin` prevents loading credentials from secure storage.
   ///
   /// Used for logging out from the settings screen.
   final bool autoLogin;
-  final SettingsNotifier settingsNotifier;
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -72,7 +69,6 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(
               builder: (context) => MainScreen(
                 login: loginResult,
-                settingsNotifier: widget.settingsNotifier,
                 volarezaService: volarezaService,
               )),
         );

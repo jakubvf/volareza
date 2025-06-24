@@ -6,7 +6,7 @@ import 'models/menu.dart';
 import 'models/facility.dart';
 import 'models/meal.dart';
 import 'models/calendar.dart' as cal;
-import 'main.dart';
+import 'settings/settings_provider.dart';
 import 'order_page_widgets.dart';
 
 // Type alias for compatibility
@@ -14,10 +14,9 @@ typedef CalendarItem = cal.Day;
 
 class OrderPage extends StatefulWidget {
   const OrderPage(
-      {super.key, required this.login, required this.settingsNotifier, required this.volarezaService});
+      {super.key, required this.login, required this.volarezaService});
 
   final Login login;
-  final SettingsNotifier settingsNotifier;
   final VolarezaService volarezaService;
 
   @override
@@ -59,7 +58,7 @@ class _OrderPageState extends State<OrderPage> {
   bool _isLoading = true;
 
   /// Whether to skip weekends in the calendar.
-  late final bool _showWeekends = widget.settingsNotifier.showWeekends;
+  bool get _showWeekends => SettingsProvider.of(context).showWeekends;
 
   /// Filtered calendar items that exclude weekends
   List<CalendarItem> get _filteredCalendar {
@@ -165,7 +164,7 @@ class _OrderPageState extends State<OrderPage> {
     final eateryFromOrder = item.orders?.firstOrNull?.eatery;
     if (eateryFromOrder != null) return eateryFromOrder;
 
-    final defaultEatery = widget.settingsNotifier.defaultEatery;
+    final defaultEatery = SettingsProvider.of(context).defaultEatery;
     if (defaultEatery != null) return defaultEatery;
 
     final fallbackEatery = _facility?.eateries.first.id;

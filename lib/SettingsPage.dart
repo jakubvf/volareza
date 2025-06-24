@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'ApiClient.dart';
 import 'models/facility.dart';
-import 'main.dart';
+import 'settings/settings_provider.dart';
 
 class SettingsPage extends StatefulWidget {
-  final SettingsNotifier settingsNotifier;
-
-  const SettingsPage({
-    super.key,
-    required this.settingsNotifier,
-  });
+  const SettingsPage({super.key});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -42,14 +37,16 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       _facility = await ApiClient.instance.getFacility();
 
+      final settings = SettingsProvider.of(context);
+      
       // Set default eatery if not set
-      if (widget.settingsNotifier.defaultEatery == null) {
-        widget.settingsNotifier.setDefaultEatery(_facility!.eateries.first.id);
+      if (settings.defaultEatery == null) {
+        settings.setDefaultEatery(_facility!.eateries.first.id);
       }
 
       // Find the default eatery inside preferences
       final eatery = _facility!.eateries
-          .where((eatery) => eatery.id == widget.settingsNotifier.defaultEatery)
+          .where((eatery) => eatery.id == settings.defaultEatery)
           .first;
 
       if (!mounted) return;
@@ -105,16 +102,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 description('Pokud objednáváte obědy i o víkendech, můžete si nechat zobrazit i nabídku na sobotu a neděli.'),
-                SwitchListTile(
-                  title: widget.settingsNotifier.showWeekends
-                      ? Text('Zobrazovat')
-                      : Text('Nezobrazovat'),
-                  value: widget.settingsNotifier.showWeekends,
-                  secondary: const Icon(Icons.calendar_today),
-                  onChanged: (bool value) {
-                    setState(() {
-                      widget.settingsNotifier.setShowWeekends(value);
-                    });
+                Builder(
+                  builder: (context) {
+                    final settings = SettingsProvider.of(context);
+                    return SwitchListTile(
+                      title: settings.showWeekends
+                          ? Text('Zobrazovat')
+                          : Text('Nezobrazovat'),
+                      value: settings.showWeekends,
+                      secondary: const Icon(Icons.calendar_today),
+                      onChanged: (bool value) {
+                        setState(() {
+                          settings.setShowWeekends(value);
+                        });
+                      },
+                    );
                   },
                 ),
               ],
@@ -178,7 +180,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _getThemeText() {
-    switch (widget.settingsNotifier.themeMode) {
+    final settings = SettingsProvider.of(context);
+    switch (settings.themeMode) {
       case ThemeMode.system:
         return 'Podle systému';
       case ThemeMode.light:
@@ -189,7 +192,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _getColorText() {
-    final currentColor = widget.settingsNotifier.colorSeed;
+    final settings = SettingsProvider.of(context);
+    final currentColor = settings.colorSeed;
     final option = colorOptions.firstWhere(
       (option) => option.color == currentColor,
       orElse: () => ColorSeedOption('Vlastní', currentColor),
@@ -198,6 +202,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showThemeDialog() {
+    final settings = SettingsProvider.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -209,27 +214,27 @@ class _SettingsPageState extends State<SettingsPage> {
               RadioListTile<ThemeMode>(
                 title: const Text('Podle systému'),
                 value: ThemeMode.system,
-                groupValue: widget.settingsNotifier.themeMode,
+                groupValue: settings.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.settingsNotifier.setThemeMode(value!);
+                  await settings.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
               RadioListTile<ThemeMode>(
                 title: const Text('Vždy světlý'),
                 value: ThemeMode.light,
-                groupValue: widget.settingsNotifier.themeMode,
+                groupValue: settings.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.settingsNotifier.setThemeMode(value!);
+                  await settings.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
               RadioListTile<ThemeMode>(
                 title: const Text('Vždy tmavý'),
                 value: ThemeMode.dark,
-                groupValue: widget.settingsNotifier.themeMode,
+                groupValue: settings.themeMode,
                 onChanged: (ThemeMode? value) async {
-                  await widget.settingsNotifier.setThemeMode(value!);
+                  await settings.setThemeMode(value!);
                   if (mounted) Navigator.of(context).pop();
                 },
               ),
@@ -241,6 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showColorDialog() {
+    final settings = SettingsProvider.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -261,9 +267,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   value: option.color,
-                  groupValue: widget.settingsNotifier.colorSeed,
+                  groupValue: settings.colorSeed,
                   onChanged: (Color? value) async {
-                    await widget.settingsNotifier.setColorSeed(value!);
+                    await settings.setColorSeed(value!);
                     if (mounted) Navigator.of(context).pop();
                   },
                 );
@@ -276,6 +282,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showDefaultEateryDialog() {
+    final settings = SettingsProvider.of(context);
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -288,9 +295,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 return RadioListTile<String>(
                   title: Text(eatery.name),
                   value: eatery.id,
-                  groupValue: widget.settingsNotifier.defaultEatery,
+                  groupValue: settings.defaultEatery,
                   onChanged: (String? value) async {
-                    await widget.settingsNotifier.setDefaultEatery(value!);
+                    await settings.setDefaultEatery(value!);
                     setState(() {
                       _facilityName = eatery.name;
                     });
