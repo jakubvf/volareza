@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:volareza/json_parsing.dart';
 
 import 'ApiClient.dart';
+import 'models/facility.dart';
 import 'main.dart';
 
 class SettingsPage extends StatefulWidget {

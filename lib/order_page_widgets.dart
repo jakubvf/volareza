@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'AnimatedCreditLabel.dart';
-import 'json_parsing.dart';
+import 'models/meal.dart';
+import 'models/menu.dart';
+import 'models/eatery.dart';
+import 'models/calendar.dart' as cal;
+
+// Type aliases for compatibility
+typedef CalendarItem = cal.Day;
 
 class CreditDisplay extends StatelessWidget {
   final double previousCredit;
@@ -84,7 +90,7 @@ class DayInfoRow extends StatelessWidget {
 class MealCard extends StatelessWidget {
   final Meal meal;
   final bool isTapped;
-  final int status;
+  final MealStatus status;
   final VoidCallback? onTap;
 
   const MealCard({
@@ -108,13 +114,13 @@ class MealCard extends StatelessWidget {
         title: Text(meal.name),
         subtitle: Text(meal.code),
         trailing: _buildTrailingIcon(),
-        onTap: status != -1 ? onTap : null,
+        onTap: status != MealStatus.notAvailable ? onTap : null,
       ),
     );
   }
 
   Widget? _buildTrailingIcon() {
-    if (!isTapped && status != 2) return null;
+    if (!isTapped && status != MealStatus.ordered) return null;
 
     return Icon(
       isTapped ? Icons.check_outlined : Icons.check,
@@ -122,14 +128,13 @@ class MealCard extends StatelessWidget {
     );
   }
 
-  Color _getMealStatusColor(BuildContext context, int status) {
+  Color _getMealStatusColor(BuildContext context, MealStatus status) {
     return switch (status) {
-      -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
-      0 => Theme.of(context).colorScheme.surfaceContainerHighest,
-      2 => Theme.of(context).colorScheme.primaryContainer,
-      3 => Theme.of(context).colorScheme.tertiaryContainer,
-      4 => Theme.of(context).colorScheme.tertiaryContainer,
-      _ => throw UnimplementedError(),
+      MealStatus.notAvailable => Theme.of(context).colorScheme.surfaceContainerLowest,
+      MealStatus.available => Theme.of(context).colorScheme.surfaceContainerHighest,
+      MealStatus.ordered => Theme.of(context).colorScheme.primaryContainer,
+      MealStatus.sellingOnExchange => Theme.of(context).colorScheme.tertiaryContainer,
+      MealStatus.availableInExchange => Theme.of(context).colorScheme.tertiaryContainer,
     };
   }
 }

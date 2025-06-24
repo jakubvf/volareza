@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
 import 'package:volareza/main.dart';
 import 'ApiClient.dart';
+import 'VolarezaService.dart';
 // import 'package:url_launcher/url_launcher.dart';
 // import 'package:url_launcher/url_launcher_string.dart';
 
@@ -49,7 +50,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         final loginResult =
-        await ApiClient.instance.login(); // Call the async login method
+        await ApiClient.instance.loginWithStoredCredentials(); // Call the async login method
+
+        // Create VolarezaService instance
+        final volarezaService = VolarezaService(ApiClient.instance);
 
         setState(() {
           _isLoading = false;
@@ -69,6 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
               builder: (context) => MainScreen(
                 login: loginResult,
                 settingsNotifier: widget.settingsNotifier,
+                volarezaService: volarezaService,
               )),
         );
       } on ApiException catch (e) {

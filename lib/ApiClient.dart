@@ -7,8 +7,20 @@ import 'models/facility.dart';
 import 'models/login.dart';
 
 class ApiClient {
+  static final ApiClient instance = ApiClient._internal();
+  ApiClient._internal();
+  
   final String baseUrl = 'https://unob.jidelny-vlrz.cz';
   String? phpSessionIdCookie = '';
+  
+  // Stored credentials for singleton pattern
+  static String? _username;
+  static String? _password;
+  
+  static void initialize(String username, String password) {
+    _username = username;
+    _password = password;
+  }
 
   static String hashPassword(String input) {
     List<int> bytes = utf8.encode(input);
@@ -76,6 +88,14 @@ class ApiClient {
     return Login.fromJson(response['data']);
   }
 
+  // Singleton login method using stored credentials
+  Future<Login> loginWithStoredCredentials() async {
+    if (_username == null || _password == null) {
+      throw ApiException('ApiClient not initialized. Call initialize() first.');
+    }
+    return login(_username!, _password!);
+  }
+
   Future<Facility> getFacility() async {
     final response = await _makeRequest(path: '/service/', req: 'facility');
     return Facility.fromJson(response['data']);
@@ -88,6 +108,11 @@ class ApiClient {
     };
     final response = await _makeRequest(path: '/service/', req: 'facility', data: data);
     return Menu.fromJson(response['data'], date);
+  }
+
+  // Alias for OrderPage compatibility
+  Future<Menu> getDay(String preferredEatery, String date) async {
+    return getMenuForDate(preferredEatery, date);
   }
 
   /// Unused, here for reference

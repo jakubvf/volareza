@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'json_parsing.dart';
+import 'models/login.dart';
 
 class ProfilePage extends StatelessWidget {
   final Login login;

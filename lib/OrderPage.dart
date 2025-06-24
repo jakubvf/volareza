@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'ApiClient.dart';
-import 'json_parsing.dart';
+import 'VolarezaService.dart';
 import 'models/login.dart';
+import 'models/menu.dart';
+import 'models/facility.dart';
+import 'models/meal.dart';
+import 'models/calendar.dart' as cal;
 import 'main.dart';
 import 'order_page_widgets.dart';
 
+// Type alias for compatibility
+typedef CalendarItem = cal.Day;
+
 class OrderPage extends StatefulWidget {
   const OrderPage(
-      {super.key, required this.login, required this.settingsNotifier});
+      {super.key, required this.login, required this.settingsNotifier, required this.volarezaService});
 
   final Login login;
   final SettingsNotifier settingsNotifier;
+  final VolarezaService volarezaService;
 
   @override
   State<OrderPage> createState() => _OrderPageState();
@@ -55,13 +62,15 @@ class _OrderPageState extends State<OrderPage> {
   late final bool _showWeekends = widget.settingsNotifier.showWeekends;
 
   /// Filtered calendar items that exclude weekends
-  List<CalendarItem> get _filteredCalendar =>
-      !_showWeekends && _facility != null
-          ? _facility!.calendar.where((item) {
-              final date = _parseDateTime(item.date);
-              return date.weekday < 6; // Monday to Friday
-            }).toList()
-          : _facility?.calendar ?? [];
+  List<CalendarItem> get _filteredCalendar {
+    if (_facility == null) return [];
+    return !_showWeekends
+        ? _facility!.calendar.where((item) {
+            final date = _parseDateTime(item.date);
+            return date.weekday < 6; // Monday to Friday
+          }).toList().cast<CalendarItem>()
+        : _facility!.calendar.cast<CalendarItem>();
+  }
 
   @override
   void initState() {
@@ -109,9 +118,8 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   Future<void> _preloadDataAroundIndex(int index) async {
-    final calendar = _facility!.calendar;
     List<CalendarItem> calendarToUse =
-        _showWeekends ? calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar.cast<CalendarItem>() : _filteredCalendar;
     if (calendarToUse.isEmpty) return;
 
     if (index < 0 || index >= calendarToUse.length) {
@@ -201,7 +209,7 @@ class _OrderPageState extends State<OrderPage> {
     if (!mounted) return;
 
     try {
-      final facility = await ApiClient.instance.getFacility();
+      final facility = await widget.volarezaService.getFacility();
 
       if (!mounted) return;
       setState(() {
@@ -220,7 +228,7 @@ class _OrderPageState extends State<OrderPage> {
     if (!mounted) return;
 
     try {
-      final day = await ApiClient.instance.getDay(eateryId, date);
+      final day = await widget.volarezaService.getDay(eateryId, date);
 
       if (!mounted) return;
       setState(() {
@@ -239,12 +247,12 @@ class _OrderPageState extends State<OrderPage> {
     _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
 
     try {
-      if (meal.status == 4 || meal.status == 3) {
+      if (meal.status == MealStatus.availableInExchange || meal.status == MealStatus.sellingOnExchange) {
         _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance
+        await widget.volarezaService
             .exchange(currentDay.date, currentDay.eatery, false);
       } else {
-        await ApiClient.instance
+        await widget.volarezaService
             .order(currentDay.date, currentDay.eatery, meal.id, meal.menuId);
       }
       if (!mounted) return;
@@ -259,12 +267,12 @@ class _OrderPageState extends State<OrderPage> {
     _updateCredit(_figureOutPriceForAMeal(currentDay, meal));
 
     try {
-      final succeeded = await ApiClient.instance
+      final succeeded = await widget.volarezaService
           .cancelOrder(currentDay.date, currentDay.eatery);
       // if order cancellation fails, try to exchange the meal
       if (!succeeded) {
         _updateCredit(-_figureOutPriceForAMeal(currentDay, meal));
-        await ApiClient.instance
+        await widget.volarezaService
             .exchange(currentDay.date, currentDay.eatery, true);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Jídlo vloženo do burzy.')));
@@ -287,9 +295,10 @@ class _OrderPageState extends State<OrderPage> {
           menuId: m.menuId,
           name: m.name,
           code: m.code,
-          status: isOrdering ? 2 : 0,
+          status: isOrdering ? MealStatus.ordered : MealStatus.available,
           alergens: m.alergens,
           group: m.group,
+          price: m.price,
         );
       }
       return m;
@@ -322,6 +331,10 @@ class _OrderPageState extends State<OrderPage> {
   Future<void> _refreshData(Day currentDay) async {
     await _fetchDayData(currentDay.eatery, currentDay.date);
     await _fetchFacilityData();
+  }
+
+  double _figureOutPriceForAMeal(Day currentDay, Meal meal) {
+    return meal.price;
   }
 
   void _handleError(dynamic error) {
@@ -359,7 +372,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ? _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar.cast<CalendarItem>() : _filteredCalendar;
 
     return PageView.builder(
       controller: _pageController,
@@ -384,7 +397,6 @@ class _OrderPageState extends State<OrderPage> {
 
                   setState(() {
                     _mealTapped.clear();
-                    currentDay.eatery = newEatery;
                   });
 
                   _fetchDayData(newEatery, currentDay.date);
@@ -409,7 +421,7 @@ class _OrderPageState extends State<OrderPage> {
     final isTapped = _mealTapped[meal.id] ?? false;
 
     if (isTapped) {
-      if (meal.status == 2) {
+      if (meal.status == MealStatus.ordered) {
         _handleCancelOrder(currentDay, meal);
       } else {
         _handleOrder(currentDay, meal);
@@ -428,7 +440,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-        _showWeekends ? _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar.cast<CalendarItem>() : _filteredCalendar;
 
     if (index < 0 || index >= calendarToUse.length) return;
 

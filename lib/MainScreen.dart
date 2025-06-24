@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
-import 'json_parsing.dart';
+import 'models/login.dart';
 import 'OrderPage.dart';
 import 'ProfilePage.dart';
 import 'SettingsPage.dart';
+import 'VolarezaService.dart';
 import 'main.dart';
 
 class MainScreen extends StatefulWidget {
   final Login login;
   final SettingsNotifier settingsNotifier;
+  final VolarezaService volarezaService;
 
-  MainScreen({super.key, required this.login, required this.settingsNotifier});
+  MainScreen({super.key, required this.login, required this.settingsNotifier, required this.volarezaService});
 
   @override
   _MainScreenState createState() => _MainScreenState();
@@ -24,7 +26,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _pages = [
-      OrderPage(login: widget.login, settingsNotifier: widget.settingsNotifier),
+      OrderPage(login: widget.login, settingsNotifier: widget.settingsNotifier, volarezaService: widget.volarezaService),
       SettingsPage(settingsNotifier: widget.settingsNotifier),
       ProfilePage(login: widget.login),
     ];
