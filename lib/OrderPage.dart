@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'AnimatedCreditLabel.dart';
 import 'ApiClient.dart';
 import 'json_parsing.dart';
+import 'models/login.dart';
 import 'main.dart';
+import 'order_page_widgets.dart';
 
 class OrderPage extends StatefulWidget {
   const OrderPage(
@@ -57,9 +58,9 @@ class _OrderPageState extends State<OrderPage> {
   List<CalendarItem> get _filteredCalendar =>
       !_showWeekends && _facility != null
           ? _facility!.calendar.where((item) {
-        final date = _parseDateTime(item.date);
-        return date.weekday < 6; // Monday to Friday
-      }).toList()
+              final date = _parseDateTime(item.date);
+              return date.weekday < 6; // Monday to Friday
+            }).toList()
           : _facility?.calendar ?? [];
 
   @override
@@ -110,7 +111,7 @@ class _OrderPageState extends State<OrderPage> {
   Future<void> _preloadDataAroundIndex(int index) async {
     final calendar = _facility!.calendar;
     List<CalendarItem> calendarToUse =
-    _showWeekends ? calendar : _filteredCalendar;
+        _showWeekends ? calendar : _filteredCalendar;
     if (calendarToUse.isEmpty) return;
 
     if (index < 0 || index >= calendarToUse.length) {
@@ -120,7 +121,7 @@ class _OrderPageState extends State<OrderPage> {
     final initialCalendarItem = calendarToUse[index];
 
     // preload current day
-        {
+    {
       final eateryId = _figureOutEateryOfCalendarItem(initialCalendarItem);
       if (eateryId == null) {
         _handleError('Chyba při načítání jídelny');
@@ -163,7 +164,6 @@ class _OrderPageState extends State<OrderPage> {
     return fallbackEatery is String ? fallbackEatery : null;
   }
 
-
   @override
   void dispose() {
     _pageController.dispose();
@@ -181,35 +181,19 @@ class _OrderPageState extends State<OrderPage> {
             height: 40,
           ),
           actions: [
-            _buildCreditDisplay(context),
+            CreditDisplay(
+              previousCredit: _previousCredit,
+              currentCredit: _currentCredit,
+            ),
           ]),
-      drawer: _buildCalendarDrawer(),
-      body: _isLoading ? const LoadingIndicator() : _buildContent(),
-    );
-  }
-
-  Widget _buildCreditDisplay(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Kredit: ',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            AnimatedCreditLabel(
-              startValue: _previousCredit,
-              endValue: _currentCredit,
-              suffix: ' Kč',
-              textStyle: Theme.of(context).textTheme.titleMedium,
-              duration: const Duration(milliseconds: 800),
-              decimals: 0,
-            ),
-          ],
-        ),
+      drawer: CalendarDrawer(
+        calendarItems: _filteredCalendar,
+        onTilePressed: (index) {
+          Navigator.pop(context);
+          _pageController.jumpToPage(index);
+        },
       ),
+      body: _isLoading ? const LoadingIndicator() : _buildContent(),
     );
   }
 
@@ -249,7 +233,6 @@ class _OrderPageState extends State<OrderPage> {
       return;
     }
   }
-
 
   Future<void> _handleOrder(Day currentDay, Meal meal) async {
     _optimisticUpdate(currentDay, meal, true);
@@ -313,7 +296,7 @@ class _OrderPageState extends State<OrderPage> {
     }).toList();
 
     Meals updatedMeals =
-    Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
+        Meals(lunch: updatedLunchMeals, breakfast: [], dinner: []);
 
     Day optimisticDay = Day(
       date: currentDay.date,
@@ -376,7 +359,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-    _showWeekends ? _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     return PageView.builder(
       controller: _pageController,
@@ -387,205 +370,56 @@ class _OrderPageState extends State<OrderPage> {
         final currentDay = _loadedDays[calendarItem.date];
 
         return currentDay != null
-            ? _buildDayContent(currentDay)
-            : const LoadingIndicator(); // Consider showing loading here too
+            ? DayContent(
+                currentDay: currentDay,
+                mealTapped: _mealTapped,
+                onMealTap: _handleMealTap,
+                eateries: _facility?.eateries ?? [],
+                onEateryChanged: (String? newValue) {
+                  if (newValue == null) return;
+
+                  final newEatery = _facility!.eateries
+                      .firstWhere((eatery) => eatery.name == newValue)
+                      .id;
+
+                  setState(() {
+                    _mealTapped.clear();
+                    currentDay.eatery = newEatery;
+                  });
+
+                  _fetchDayData(newEatery, currentDay.date);
+                },
+                onPreviousDay: () {
+                  _pageController.previousPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.fastEaseInToSlowEaseOut);
+                },
+                onNextDay: () {
+                  _pageController.nextPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.fastEaseInToSlowEaseOut);
+                },
+              )
+            : const LoadingIndicator();
       },
     );
   }
 
-  Widget _buildDayContent(Day currentDay) {
-    final meals = currentDay.meals;
-
-    return Column(
-      children: [
-        const Padding(padding: EdgeInsets.only(top: 16)),
-        _buildDayInfoRow(currentDay),
-        Expanded(
-          child: meals.lunch.isEmpty
-              ? Center(
-            child: Text(
-              "Žádná jídla k dispozici",
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          )
-              : ListView.builder(
-            itemCount: meals.lunch.length,
-            itemBuilder: (context, index) =>
-                _buildMealCard(meals.lunch[index], currentDay),
-          ),
-        ),
-        const Divider(),
-        _buildEateriesDropdown(currentDay),
-        const Padding(padding: EdgeInsets.only(bottom: 12)),
-      ],
-    );
-  }
-
-  Widget _buildDayInfoRow(Day currentDay) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          IconButton(
-              onPressed: () => {
-                setState(() {
-                  _pageController.previousPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.fastEaseInToSlowEaseOut);
-                })
-              },
-              icon: Icon(Icons.arrow_back)),
-          Expanded(
-            child: Center(
-                child: Text(
-                  '${DateFormat('EEEE').format(_parseDateTime(currentDay.date))} ${currentDay.date}',
-                  // Use DateFormat
-                  style: Theme.of(context).textTheme.titleMedium,
-                )),
-          ),
-          IconButton(
-              onPressed: () => {
-                setState(() {
-                  _pageController.nextPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.fastEaseInToSlowEaseOut);
-                })
-              },
-              icon: Icon(Icons.arrow_forward)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMealCard(Meal meal, Day currentDay) {
+  void _handleMealTap(Meal meal, Day currentDay) {
     final isTapped = _mealTapped[meal.id] ?? false;
-    final color = isTapped
-        ? Theme.of(context).colorScheme.errorContainer
-        : _getMealStatusColor(meal.status);
-
-    return Card(
-      elevation: 0.0,
-      color: color,
-      child: ListTile(
-        title: Text(meal.name),
-        subtitle: Text(meal.code),
-        trailing: _buildMealTrailingIcon(meal, isTapped, meal.status),
-        onTap: meal.status != -1
-            ? () => _handleMealTap(meal, currentDay, meal)
-            : null,
-      ),
-    );
-  }
-
-  Widget? _buildMealTrailingIcon(Meal meal, bool isTapped, int status) {
-    if (!isTapped && status != 2) return null;
-
-    return Icon(
-      isTapped ? Icons.check_outlined : Icons.check,
-      color: isTapped ? Colors.white : Colors.black,
-    );
-  }
-
-  void _handleMealTap(Meal meal, Day currentDay, Meal tappedMeal) {
-    final isTapped = _mealTapped[tappedMeal.id] ?? false;
 
     if (isTapped) {
-      if (tappedMeal.status == 2) {
-        _handleCancelOrder(currentDay, tappedMeal);
+      if (meal.status == 2) {
+        _handleCancelOrder(currentDay, meal);
       } else {
-        _handleOrder(currentDay, tappedMeal);
+        _handleOrder(currentDay, meal);
       }
     } else {
       setState(() {
         _mealTapped.clear();
-        _mealTapped[tappedMeal.id] = true;
+        _mealTapped[meal.id] = true;
       });
     }
-  }
-
-  Color _getMealStatusColor(int status) {
-    return switch (status) {
-      -1 => Theme.of(context).colorScheme.surfaceContainerLowest,
-      0 => Theme.of(context).colorScheme.surfaceContainerHighest,
-      2 => Theme.of(context).colorScheme.primaryContainer,
-    // 3 => moje jidlo vlozene do burzy
-      3 => Theme.of(context).colorScheme.tertiaryContainer,
-    // 4 => jidlo dostupne v burze
-      4 => Theme.of(context).colorScheme.tertiaryContainer,
-      _ => throw UnimplementedError(),
-    };
-  }
-
-  Widget _buildEateriesDropdown(Day currentDay) {
-    if (_facility == null || _facility!.eateries.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final currentEatery =
-    _facility!.eateries.firstWhere((e) => e.id == currentDay.eatery);
-
-    return DropdownButton<String>(
-      value: currentEatery.name,
-      hint: const Text('Zvolit jídelnu'),
-      items: _facility!.eateries
-          .map((eatery) => DropdownMenuItem<String>(
-        value: eatery.name,
-        child: Text(eatery.name),
-      ))
-          .toList(),
-      onChanged: (String? newValue) {
-        if (newValue == null) return;
-
-        final newEatery = _facility!.eateries
-            .firstWhere((eatery) => eatery.name == newValue)
-            .id;
-
-        setState(() {
-          _mealTapped.clear();
-          currentDay.eatery = newEatery;
-        });
-
-        _fetchDayData(newEatery, currentDay.date);
-      },
-    );
-  }
-
-  Widget _buildCalendarDrawer() {
-    if (_facility == null || _facility!.calendar.isEmpty) {
-      return const Drawer(
-        child: Center(child: Text('Nepodařilo se načíst kalendář')),
-      );
-    }
-
-    List<CalendarItem> calendarToUse =
-    _showWeekends ? _facility!.calendar : _filteredCalendar;
-
-    return Drawer(
-      child: ListView.builder(
-        itemCount: calendarToUse.length,
-        itemBuilder: (context, index) =>
-            _buildCalendarTile(calendarToUse[index], index),
-      ),
-    );
-  }
-
-  Widget _buildCalendarTile(CalendarItem item, int index) {
-    final date = _parseDateTime(item.date);
-
-    final hasOrders = item.orders?.isNotEmpty ?? false;
-    final color = _getCalendarTileColor(date.weekday, hasOrders);
-
-    return ListTile(
-      title: Text("${item.date} - ${DateFormat('EEEE').format(date)}"),
-      tileColor: color,
-      subtitle: Text(item.orders?.map((order) => order.name).join(', ') ??
-          'Žádné objednávky'),
-      onTap: () {
-        Navigator.pop(context);
-        _pageController.jumpToPage(index);
-      },
-    );
   }
 
   void _handlePageChange(int index) {
@@ -594,7 +428,7 @@ class _OrderPageState extends State<OrderPage> {
     }
 
     List<CalendarItem> calendarToUse =
-    _showWeekends ? _facility!.calendar : _filteredCalendar;
+        _showWeekends ? _facility!.calendar : _filteredCalendar;
 
     if (index < 0 || index >= calendarToUse.length) return;
 
@@ -628,19 +462,6 @@ class _OrderPageState extends State<OrderPage> {
       }
     }
   }
-
-  Color _getCalendarTileColor(int weekday, bool hasOrders) {
-    if (weekday >= 6) {
-      return Theme.of(context).colorScheme.surfaceDim.withAlpha(255);
-    }
-    if (hasOrders) {
-      return Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withAlpha(100);
-    }
-    return Theme.of(context).colorScheme.errorContainer.withAlpha(200);
-  }
 }
 
 DateTime _parseDateTime(String date) {
@@ -648,33 +469,5 @@ DateTime _parseDateTime(String date) {
     return DateFormat('dd.MM.yyyy').parse(date);
   } catch (e) {
     throw FormatException('Invalid date format: $date');
-  }
-}
-
-class LoadingIndicator extends StatelessWidget {
-  const LoadingIndicator({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
-  }
-}
-
-class ErrorDisplay extends StatelessWidget {
-  final String error;
-
-  const ErrorDisplay({super.key, required this.error}); // Use named parameter
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Text(
-          'Chyba: $error',
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-      ),
-    );
   }
 }
