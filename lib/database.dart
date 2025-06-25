@@ -73,7 +73,8 @@ class AppDatabase extends _$AppDatabase {
   Future<List<Event>> eventsOfGroupOnDate(String group, DateTime date) {
     return (select(events)
         ..where((e) => e.date.equals(date.toIso8601String().split('T')[0]))
-        ..where((e) => e.groupNames.contains(group)))
+        ..where((e) => e.groupNames.contains(group))
+        ..orderBy([(e) => OrderingTerm(expression: e.startTime)]))
         .get();
   }
 

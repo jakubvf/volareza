@@ -25,8 +25,10 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _pages = [
+      // TODO: A homepage
       OrderPage(login: widget.login, volarezaService: widget.volarezaService),
       TimetablePage(),
+      // TODO: Move SettingsPage to ProfilePage
       const SettingsPage(),
       ProfilePage(login: widget.login),
     ];

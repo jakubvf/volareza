@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'VolarezaService.dart';
 import 'models/login.dart';
 import 'models/menu.dart';
@@ -8,6 +7,7 @@ import 'models/meal.dart';
 import 'models/calendar.dart' as cal;
 import 'settings/settings_provider.dart';
 import 'order_page_widgets.dart';
+import 'date_utils.dart';
 
 // Type alias for compatibility
 typedef CalendarItem = cal.Day;
@@ -65,7 +65,7 @@ class _OrderPageState extends State<OrderPage> {
     if (_facility == null) return [];
     return !_showWeekends
         ? _facility!.calendar.where((item) {
-            final date = _parseDateTime(item.date);
+            final date = CzechDateUtils.parseDateTime(item.date);
             return date.weekday < 6; // Monday to Friday
           }).toList().cast<CalendarItem>()
         : _facility!.calendar.cast<CalendarItem>();
@@ -90,7 +90,7 @@ class _OrderPageState extends State<OrderPage> {
 
     // Find the first non-weekend day
     for (int i = 0; i < _facility!.calendar.length; i++) {
-      final date = _parseDateTime(_facility!.calendar[i].date);
+      final date = CzechDateUtils.parseDateTime(_facility!.calendar[i].date);
       if (date.weekday < 6) {
         return i;
       }
@@ -356,11 +356,11 @@ class _OrderPageState extends State<OrderPage> {
     return Stack(
       children: [
         if (_error != null)
-          ErrorDisplay(error: _error!) // Use a named parameter
+          ErrorDisplay(error: _error!)
         else if (_facility != null)
           _buildPageView()
         else
-          const LoadingIndicator(), // More descriptive name
+          const LoadingIndicator(),
       ],
     );
   }
@@ -475,10 +475,3 @@ class _OrderPageState extends State<OrderPage> {
   }
 }
 
-DateTime _parseDateTime(String date) {
-  try {
-    return DateFormat('dd.MM.yyyy').parse(date);
-  } catch (e) {
-    throw FormatException('Invalid date format: $date');
-  }
-}
