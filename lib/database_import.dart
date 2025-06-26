@@ -1,12 +1,15 @@
 import 'package:flutter/services.dart';
 import 'package:drift/drift.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'database.dart';
 
 class DatabaseImporter {
   static Future<void> importFromAssets(AppDatabase database) async {
-    // Load JSON from assets
-    final jsonString = await rootBundle.loadString('assets/rozvrh.json');
+    // Load JSON from assets as bytes to avoid string decompression overhead
+    final ByteData data = await rootBundle.load('assets/rozvrh.json');
+    final Uint8List bytes = data.buffer.asUint8List();
+    final jsonString = String.fromCharCodes(bytes);
     final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
 
     // Clear existing data
