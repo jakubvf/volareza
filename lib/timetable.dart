@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'database_provider.dart';
 import 'database.dart';
 import 'database_import.dart';
@@ -12,9 +13,26 @@ class TimetablePage extends StatefulWidget {
 }
 
 class _TimetablePageState extends State<TimetablePage> {
-  DateTime selectedDate = DateTime.now();
-  PageController pageController = PageController(initialPage: 365);
+  late DateTime selectedDate;
+  late PageController pageController;
   Map<String, List<Event>> eventCache = {};
+
+  DateTime _getNearestWeekday(DateTime date) {
+    if (date.weekday <= 5) {
+      return date;
+    } else if (date.weekday == 6) { // Saturday
+      return date.add(const Duration(days: 2)); // Move to Monday
+    } else { // Sunday
+      return date.add(const Duration(days: 1)); // Move to Monday
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    selectedDate = _getNearestWeekday(DateTime.now());
+    pageController = PageController(initialPage: 365);
+  }
 
   @override
   void dispose() {
@@ -33,10 +51,12 @@ class _TimetablePageState extends State<TimetablePage> {
           IconButton(
             icon: const Icon(Icons.today),
             onPressed: () {
+              final today = _getNearestWeekday(DateTime.now());
               setState(() {
-                selectedDate = DateTime.now();
+                selectedDate = today;
+                final index = _getIndexFromWeekday(today);
                 pageController.animateToPage(
-                  365,
+                  index,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
                 );
@@ -79,23 +99,17 @@ class _TimetablePageState extends State<TimetablePage> {
             },
             child: const Text('Nahrát databázi'),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              _formatDate(selectedDate),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
+          _buildWeekDaysRow(),
           Expanded(
             child: PageView.builder(
               controller: pageController,
               onPageChanged: (index) {
                 setState(() {
-                  selectedDate = DateTime.now().add(Duration(days: index - 365));
+                  selectedDate = _getWeekdayFromIndex(index);
                 });
               },
               itemBuilder: (context, index) {
-                final date = DateTime.now().add(Duration(days: index - 365));
+                final date = _getWeekdayFromIndex(index);
                 return _buildTimetableForDate(context, date);
               },
             ),
@@ -105,12 +119,142 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final weekdays = ['Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota', 'Neděle'];
-    final months = ['ledna', 'února', 'března', 'dubna', 'května', 'června',
-                   'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+  Widget _buildWeekDaysRow() {
+    final startOfWeek = _getStartOfWeek(selectedDate);
+    final weekDays = List.generate(5, (index) => startOfWeek.add(Duration(days: index)));
     
-    return '${weekdays[date.weekday - 1]}, ${date.day}. ${months[date.month - 1]} ${date.year}';
+    return Container(
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: weekDays.map((day) {
+          final isSelected = isSameDay(day, selectedDate);
+          final isToday = isSameDay(day, DateTime.now());
+          
+          return Expanded(
+            child: InkWell(
+              onTap: () => _selectDate(day),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: isSelected 
+                    ? Theme.of(context).colorScheme.primary
+                    : (isToday ? Theme.of(context).colorScheme.primaryContainer : null),
+                  borderRadius: BorderRadius.circular(12),
+                  border: isToday && !isSelected 
+                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
+                    : null,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _getShortWeekday(day.weekday),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected 
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      day.day.toString(),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected 
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  DateTime _getStartOfWeek(DateTime date) {
+    return date.subtract(Duration(days: date.weekday - 1));
+  }
+
+  String _getShortWeekday(int weekday) {
+    const shortWeekdays = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
+    return shortWeekdays[weekday - 1];
+  }
+
+  DateTime _getWeekdayFromIndex(int index) {
+    // Convert page index to weekday-only dates
+    // Index 365 represents today (if it's a weekday) or the nearest weekday
+    final baseDate = DateTime.now();
+    final weekdayIndex = index - 365;
+    
+    if (weekdayIndex == 0) {
+      return _getNearestWeekday(baseDate);
+    }
+    
+    DateTime result = _getNearestWeekday(baseDate);
+    int daysToAdd = weekdayIndex;
+    
+    while (daysToAdd != 0) {
+      if (daysToAdd > 0) {
+        result = result.add(const Duration(days: 1));
+        if (result.weekday <= 5) { // Monday to Friday
+          daysToAdd--;
+        }
+      } else {
+        result = result.subtract(const Duration(days: 1));
+        if (result.weekday <= 5) { // Monday to Friday
+          daysToAdd++;
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  int _getIndexFromWeekday(DateTime date) {
+    // Convert weekday date to page index
+    final baseDate = _getNearestWeekday(DateTime.now());
+    int index = 365;
+    
+    if (date.isBefore(baseDate)) {
+      DateTime current = baseDate;
+      while (!isSameDay(current, date)) {
+        current = current.subtract(const Duration(days: 1));
+        if (current.weekday <= 5) {
+          index--;
+        }
+      }
+    } else if (date.isAfter(baseDate)) {
+      DateTime current = baseDate;
+      while (!isSameDay(current, date)) {
+        current = current.add(const Duration(days: 1));
+        if (current.weekday <= 5) {
+          index++;
+        }
+      }
+    }
+    
+    return index;
+  }
+
+  void _selectDate(DateTime date) {
+    setState(() {
+      selectedDate = date;
+      final index = _getIndexFromWeekday(date);
+      pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   Widget _buildTimetableForDate(BuildContext context, DateTime date) {
