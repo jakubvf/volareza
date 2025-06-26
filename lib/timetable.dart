@@ -14,6 +14,7 @@ class TimetablePage extends StatefulWidget {
 class _TimetablePageState extends State<TimetablePage> {
   DateTime selectedDate = DateTime.now();
   PageController pageController = PageController(initialPage: 365);
+  Map<String, List<Event>> eventCache = {};
 
   @override
   void dispose() {
@@ -114,30 +115,65 @@ class _TimetablePageState extends State<TimetablePage> {
 
   Widget _buildTimetableForDate(BuildContext context, DateTime date) {
     final database = DatabaseProvider.of(context);
-    final events = database.eventsOfGroupOnDate('22-5KB', date);
-
+    final dateKey = '${date.year}-${date.month}-${date.day}';
+    
+    // If we have cached data, use it immediately
+    if (eventCache.containsKey(dateKey)) {
+      final events = eventCache[dateKey]!;
+      _preloadAdjacentDays(database, date);
+      return _buildEventList(events);
+    }
+    
+    // Otherwise fetch data and cache it
     return FutureBuilder<List<Event>>(
-        future: events,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Chyba: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Žádné události pro dnešní den.'));
-          } else {
-            final eventList = snapshot.data!;
-            return ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: eventList.length,
-              itemBuilder: (context, index) {
-                final event = eventList[index];
-                return _buildEventCard(event);
-              },
-            );
-          }
-        },
+      future: database.eventsOfGroupOnDate('22-5KB', date),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Chyba: ${snapshot.error}'));
+        } else {
+          final events = snapshot.data ?? [];
+          eventCache[dateKey] = events;
+          _preloadAdjacentDays(database, date);
+          return _buildEventList(events);
+        }
+      },
     );
+  }
+
+  Widget _buildEventList(List<Event> events) {
+    if (events.isEmpty) {
+      return const Center(child: Text('Žádné události pro dnešní den.'));
+    }
+    
+    return ListView.builder(
+      padding: const EdgeInsets.all(16.0),
+      itemCount: events.length,
+      itemBuilder: (context, index) {
+        final event = events[index];
+        return _buildEventCard(event);
+      },
+    );
+  }
+
+  void _preloadAdjacentDays(AppDatabase database, DateTime currentDate) async {
+    final adjacentDays = [
+      currentDate.subtract(const Duration(days: 1)),
+      currentDate.add(const Duration(days: 1)),
+    ];
+    
+    for (final date in adjacentDays) {
+      final dateKey = '${date.year}-${date.month}-${date.day}';
+      if (!eventCache.containsKey(dateKey)) {
+        try {
+          final events = await database.eventsOfGroupOnDate('22-5KB', date);
+          eventCache[dateKey] = events;
+        } catch (e) {
+          // Ignore preload errors
+        }
+      }
+    }
   }
 
   Widget _buildEventCard(Event event) {
