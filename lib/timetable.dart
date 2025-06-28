@@ -159,7 +159,7 @@ class _TimetablePageState extends State<TimetablePage> {
             eventLoader: _getEventsForDay,
             startingDayOfWeek: StartingDayOfWeek.monday,
             availableCalendarFormats: const {
-              CalendarFormat.month: 'Týden', // swapped to show the current state, not the next one
+              CalendarFormat.month: 'Týden',
               CalendarFormat.week: 'Měsíc',
             },
             calendarStyle: const CalendarStyle(
@@ -171,8 +171,15 @@ class _TimetablePageState extends State<TimetablePage> {
                 shape: BoxShape.circle,
               ),
             ),
+            daysOfWeekVisible: true,
+            sixWeekMonthsEnforced: false,
+            availableGestures: AvailableGestures.all,
+            enabledDayPredicate: (day) {
+              return _calendarFormat == CalendarFormat.month ? true : day.weekday <= 5;
+            },
             onDaySelected: (selectedDay, focusedDay) {
-              if (!isSameDay(_selectedDay, selectedDay) && selectedDay.weekday <= _weekdaysOnly) {
+              if (!isSameDay(_selectedDay, selectedDay) && 
+                  selectedDay.weekday <= _weekdaysOnly) {
                 setState(() {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
@@ -226,7 +233,7 @@ class _TimetablePageState extends State<TimetablePage> {
             child: ValueListenableBuilder<List<Event>>(
               valueListenable: _selectedEvents,
               builder: (context, value, _) {
-                return _buildEventList(value);
+                return _buildSwipeableEventList(value);
               },
             ),
           ),
@@ -261,6 +268,24 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
 
+  Widget _buildSwipeableEventList(List<Event> events) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity == null) return;
+        
+        final velocity = details.primaryVelocity!;
+        const double sensitivity = 300.0;
+        
+        if (velocity > sensitivity) {
+          _navigateToDay(-1);
+        } else if (velocity < -sensitivity) {
+          _navigateToDay(1);
+        }
+      },
+      child: _buildEventList(events),
+    );
+  }
+
   Widget _buildEventList(List<Event> events) {
     if (events.isEmpty) {
       return const Center(child: Text('Žádné události pro dnešní den.'));
@@ -274,6 +299,25 @@ class _TimetablePageState extends State<TimetablePage> {
         return _buildTimetableEventCard(event);
       },
     );
+  }
+
+  void _navigateToDay(int direction) {
+    if (_selectedDay == null) return;
+    
+    DateTime newDay = _selectedDay!.add(Duration(days: direction));
+    
+    // Skip weekends - continue in the same direction
+    while (newDay.weekday > _weekdaysOnly) {
+      newDay = newDay.add(Duration(days: direction));
+    }
+    
+    setState(() {
+      _selectedDay = newDay;
+      _focusedDay = newDay;
+      _selectedEvents.value = _getEventsForDay(newDay);
+    });
+    
+    _loadEventsForWeek(newDay);
   }
 
   Future<void> _loadEventsForWeek(DateTime focusedDay) async {
