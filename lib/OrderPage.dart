@@ -184,9 +184,14 @@ class _OrderPageState extends State<OrderPage> {
 
     return Scaffold(
       appBar: AppBar(
-          title: Image.asset(
-            isDarkTheme ? 'assets/volareza-dark.png' : 'assets/volareza.png',
-            height: 40,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Image.asset(
+                isDarkTheme ? 'assets/volareza-dark.png' : 'assets/volareza.png',
+                height: 40,
+              ),
+            ],
           ),
           actions: [
             CreditDisplay(
@@ -412,6 +417,7 @@ class _OrderPageState extends State<OrderPage> {
 
         return currentDay != null
             ? DayContent(
+                calendarItem: calendarItem,
                 currentDay: currentDay,
                 mealTapped: _mealTapped,
                 onMealTap: _handleMealTap,

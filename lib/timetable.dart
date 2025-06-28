@@ -249,11 +249,7 @@ class _TimetablePageState extends State<TimetablePage> {
     setState(() {
       selectedDate = date;
       final index = _getIndexFromWeekday(date);
-      pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      pageController.jumpToPage(index);
     });
   }
 

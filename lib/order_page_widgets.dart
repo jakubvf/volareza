@@ -50,39 +50,45 @@ class DayInfoRow extends StatelessWidget {
   final String date;
   final VoidCallback onPreviousDay;
   final VoidCallback onNextDay;
+  final bool hasOrders;
 
   const DayInfoRow({
     super.key,
     required this.date,
     required this.onPreviousDay,
     required this.onNextDay,
+    required this.hasOrders,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          IconButton(
-            onPressed: onPreviousDay,
-            icon: const Icon(Icons.arrow_back),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                '${DateFormat('EEEE').format(_parseDateTime(date))} $date',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              onPressed: onPreviousDay,
+              icon: const Icon(Icons.arrow_back),
             ),
-          ),
-          IconButton(
-            onPressed: onNextDay,
-            icon: const Icon(Icons.arrow_forward),
-          ),
-        ],
-      ),
+            Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Checkbox(value: hasOrders, onChanged: null),
+                    Text(
+                      '${DateFormat('EEEE').format(_parseDateTime(date))} $date',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+            ),
+            IconButton(
+              onPressed: onNextDay,
+              icon: const Icon(Icons.arrow_forward),
+            ),
+          ],
+        ),
     );
   }
 }
@@ -243,6 +249,7 @@ class CalendarTile extends StatelessWidget {
 }
 
 class DayContent extends StatelessWidget {
+  final CalendarItem calendarItem;
   final Day currentDay;
   final Map<String, bool> mealTapped;
   final Function(Meal, Day) onMealTap;
@@ -253,6 +260,7 @@ class DayContent extends StatelessWidget {
 
   const DayContent({
     super.key,
+    required this.calendarItem,
     required this.currentDay,
     required this.mealTapped,
     required this.onMealTap,
@@ -273,6 +281,7 @@ class DayContent extends StatelessWidget {
           date: currentDay.date,
           onPreviousDay: onPreviousDay,
           onNextDay: onNextDay,
+          hasOrders: calendarItem.orders?.isNotEmpty ?? false,
         ),
         Expanded(
           child: meals.lunch.isEmpty
