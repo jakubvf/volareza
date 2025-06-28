@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'models/login.dart';
 import 'OrderPage.dart';
 import 'ProfilePage.dart';
-import 'SettingsPage.dart';
 import 'VolarezaService.dart';
 import 'timetable.dart';
 
@@ -28,8 +27,6 @@ class _MainScreenState extends State<MainScreen> {
       // TODO: A homepage
       OrderPage(login: widget.login, volarezaService: widget.volarezaService),
       TimetablePage(),
-      // TODO: Move SettingsPage to ProfilePage
-      const SettingsPage(),
       ProfilePage(login: widget.login),
     ];
   }
@@ -57,10 +54,6 @@ class _MainScreenState extends State<MainScreen> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.calendar_month),
                 label: 'Rozvrh'
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'Nastavení',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person),

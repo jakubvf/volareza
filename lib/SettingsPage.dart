@@ -67,7 +67,10 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ListView(
+        appBar: AppBar(
+          title: const Text('Nastavení'),
+        ),
+        body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
           // Default eatery

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models/login.dart';
+import 'SettingsPage.dart';
 
 class ProfilePage extends StatelessWidget {
   final Login login;
@@ -11,6 +12,17 @@ class ProfilePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Profil'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SettingsPage()),
+              );
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(18.0),
