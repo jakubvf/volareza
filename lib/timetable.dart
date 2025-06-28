@@ -6,22 +6,27 @@ import 'event_detail_page.dart';
 import 'database_import.dart';
 
 class TimetablePage extends StatefulWidget {
-  const TimetablePage({Key? key}) : super(key: key);
+  static const String defaultGroupId = '22-5KB';
+  
+  const TimetablePage({super.key});
 
   @override
-  _TimetablePageState createState() => _TimetablePageState();
+  State<TimetablePage> createState() => _TimetablePageState();
 }
 
 class _TimetablePageState extends State<TimetablePage> {
   late final ValueNotifier<List<Event>> _selectedEvents;
   CalendarFormat _calendarFormat = CalendarFormat.week;
-  DateTime _focusedDay = DateTime.now();
+  late DateTime _focusedDay;
   DateTime? _selectedDay;
   Map<DateTime, List<Event>> _events = {};
-  Map<String, List<Event>> eventCache = {};
+  
+  static const int _weekdaysOnly = 5;
+  static const Duration _dayDuration = Duration(days: 1);
+  static const Duration _weekDuration = Duration(days: 4);
 
   DateTime _getNearestWeekday(DateTime date) {
-    if (date.weekday <= 5) {
+    if (date.weekday <= _weekdaysOnly) {
       return date;
     } else if (date.weekday == 6) { // Saturday
       return date.add(const Duration(days: 2)); // Move to Monday
@@ -34,6 +39,7 @@ class _TimetablePageState extends State<TimetablePage> {
   void initState() {
     super.initState();
     _selectedDay = _getNearestWeekday(DateTime.now());
+    _focusedDay = _selectedDay!;
     _selectedEvents = ValueNotifier(_getEventsForDay(_selectedDay!));
   }
 
@@ -50,30 +56,11 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _loadEvents() async {
-    final database = DatabaseProvider.of(context);
-    
     // Only load events for the current week initially for better performance
     final startOfWeek = _getStartOfWeek(_selectedDay!);
-    final endOfWeek = startOfWeek.add(const Duration(days: 4)); // Monday to Friday
+    final endOfWeek = startOfWeek.add(_weekDuration); // Monday to Friday
     
-    final eventsMap = <DateTime, List<Event>>{};
-    
-    for (DateTime date = startOfWeek; date.isBefore(endOfWeek.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
-      if (date.weekday <= 5) {
-        try {
-          final dbEvents = await database.eventsOfGroupOnDate('22-5KB', date);
-          if (dbEvents.isNotEmpty) {
-            final dateKey = DateTime(date.year, date.month, date.day);
-            eventsMap[dateKey] = dbEvents;
-            // Also cache with string key for page view
-            final stringKey = '${date.year}-${date.month}-${date.day}';
-            eventCache[stringKey] = dbEvents;
-          }
-        } catch (e) {
-          debugPrint('Error loading events for $date: $e');
-        }
-      }
-    }
+    final eventsMap = await _loadEventsForDateRange(startOfWeek, endOfWeek);
     
     setState(() {
       _events = eventsMap;
@@ -110,7 +97,6 @@ class _TimetablePageState extends State<TimetablePage> {
                 _focusedDay = today;
                 _selectedDay = today;
                 _selectedEvents.value = _getEventsForDay(_selectedDay!);
-                final index = _getIndexFromWeekday(today);
               });
             },
           ),
@@ -186,7 +172,7 @@ class _TimetablePageState extends State<TimetablePage> {
               ),
             ),
             onDaySelected: (selectedDay, focusedDay) {
-              if (!isSameDay(_selectedDay, selectedDay) && selectedDay.weekday <= 5) {
+              if (!isSameDay(_selectedDay, selectedDay) && selectedDay.weekday <= _weekdaysOnly) {
                 setState(() {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
@@ -253,31 +239,27 @@ class _TimetablePageState extends State<TimetablePage> {
     return date.subtract(Duration(days: date.weekday - 1));
   }
 
-
-  int _getIndexFromWeekday(DateTime date) {
-    final baseDate = _getNearestWeekday(DateTime.now());
-    int index = 365;
+  Future<Map<DateTime, List<Event>>> _loadEventsForDateRange(DateTime startDate, DateTime endDate) async {
+    final database = DatabaseProvider.of(context);
+    final eventsMap = <DateTime, List<Event>>{};
     
-    if (date.isBefore(baseDate)) {
-      DateTime current = baseDate;
-      while (!DateUtils.isSameDay(current, date)) {
-        current = current.subtract(const Duration(days: 1));
-        if (current.weekday <= 5) {
-          index--;
-        }
-      }
-    } else if (date.isAfter(baseDate)) {
-      DateTime current = baseDate;
-      while (!DateUtils.isSameDay(current, date)) {
-        current = current.add(const Duration(days: 1));
-        if (current.weekday <= 5) {
-          index++;
+    for (DateTime date = startDate; date.isBefore(endDate.add(_dayDuration)); date = date.add(_dayDuration)) {
+      if (date.weekday <= _weekdaysOnly) {
+        try {
+          final dbEvents = await database.eventsOfGroupOnDate(TimetablePage.defaultGroupId, date);
+          if (dbEvents.isNotEmpty) {
+            final dateKey = DateTime(date.year, date.month, date.day);
+            eventsMap[dateKey] = dbEvents;
+          }
+        } catch (e) {
+          debugPrint('Error loading events for $date: $e');
         }
       }
     }
     
-    return index;
+    return eventsMap;
   }
+
 
   Widget _buildEventList(List<Event> events) {
     if (events.isEmpty) {
@@ -295,27 +277,10 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _loadEventsForWeek(DateTime focusedDay) async {
-    final database = DatabaseProvider.of(context);
     final startOfWeek = _getStartOfWeek(focusedDay);
-    final endOfWeek = startOfWeek.add(const Duration(days: 4));
+    final endOfWeek = startOfWeek.add(_weekDuration);
     
-    final eventsMap = <DateTime, List<Event>>{};
-    
-    for (DateTime date = startOfWeek; date.isBefore(endOfWeek.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
-      if (date.weekday <= 5) {
-        try {
-          final dbEvents = await database.eventsOfGroupOnDate('22-5KB', date);
-          if (dbEvents.isNotEmpty) {
-            final dateKey = DateTime(date.year, date.month, date.day);
-            eventsMap[dateKey] = dbEvents;
-            final stringKey = '${date.year}-${date.month}-${date.day}';
-            eventCache[stringKey] = dbEvents;
-          }
-        } catch (e) {
-          debugPrint('Error loading events for $date: $e');
-        }
-      }
-    }
+    final eventsMap = await _loadEventsForDateRange(startOfWeek, endOfWeek);
     
     setState(() {
       _events.addAll(eventsMap);
