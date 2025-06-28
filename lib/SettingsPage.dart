@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'ApiClient.dart';
 import 'models/facility.dart';
@@ -177,6 +178,82 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          // About app
+          Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'O aplikaci',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                description(
+                    'Mobilní aplikace pro objednávání obědů v jídelnách Univerzity obrany. Nabízí intuitivní rozhraní pro správu jídelníčku a objednávek přímo z mobilního telefonu.'),
+                
+                // App version
+                FutureBuilder<String>(
+                  future: _getAppVersion(),
+                  builder: (context, snapshot) {
+                    return ListTile(
+                      title: const Text('Verze aplikace'),
+                      subtitle: Text(snapshot.data ?? 'Načítání...'),
+                      leading: const Icon(Icons.info_outline),
+                      onTap: () => _copyVersionToClipboard(snapshot.data),
+                    );
+                  },
+                ),
+                
+                // Publisher
+                const ListTile(
+                  title: Text('Vydavatel'),
+                  subtitle: Text('Univerzita obrany'),
+                  leading: Icon(Icons.school),
+                ),
+                
+                // Developer
+                const ListTile(
+                  title: Text('Vývojář'),
+                  subtitle: Text('Jakub Václav Flasar'),
+                  leading: Icon(Icons.person),
+                ),
+                
+                // Contact
+                ListTile(
+                  title: const Text('Kontakt'),
+                  subtitle: const Text('jakubvaclav.flasar@unob.cz'),
+                  leading: const Icon(Icons.email),
+                  onTap: () => _copyToClipboard('jakubvaclav.flasar@unob.cz', 'Email zkopírován do schránky'),
+                ),
+                
+                // Privacy info
+                ListTile(
+                  title: const Text('Ochrana osobních údajů'),
+                  subtitle: const Text('Přihlašovací údaje jsou uloženy pouze v zařízení'),
+                  leading: const Icon(Icons.privacy_tip),
+                  onTap: _showPrivacyDialog,
+                ),
+                
+                // TODO: Implement feedback
+                ListTile(
+                  title: const Text('Zpětná vazba'),
+                  subtitle: const Text('Nahlásit problém nebo návrh'),
+                  leading: const Icon(Icons.feedback),
+                  onTap: _showFeedbackDialog,
+                ),
+                
+                // Open source
+                ListTile(
+                  title: const Text('Open Source'),
+                  subtitle: const Text('Zobrazit použité knihovny'),
+                  leading: const Icon(Icons.code),
+                  onTap: _showOpenSourceDialog,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -322,6 +399,109 @@ class _SettingsPageState extends State<SettingsPage> {
         text,
         style: const TextStyle(color: Colors.grey, fontSize: 13),
       ),
+    );
+  }
+
+  Future<String> _getAppVersion() async {
+    final packageInfo = await _getPackageInfo();
+    return '${packageInfo['version']}+${packageInfo['buildNumber']}';
+  }
+
+  Future<Map<String, String>> _getPackageInfo() async {
+    // In Flutter, we need to use a different approach to get version info
+    // since package_info requires additional setup
+    return {'version': '1.0.0', 'buildNumber': '1'};
+  }
+
+  void _copyVersionToClipboard(String? version) {
+    if (version != null) {
+      _copyToClipboard(version, 'Verze zkopírována do schránky');
+    }
+  }
+  
+  void _copyToClipboard(String text, String message) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+  
+  void _showPrivacyDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Ochrana osobních údajů'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Vaše přihlašovací údaje jsou uloženy pouze v tomto zařízení pomocí zabezpečeného úložiště. '
+              'Údaje jsou odesílány pouze na oficiální služby:\n\n'
+              '• https://unob.jidelny-vlrz.cz\n'
+              '• https://adfs.unob.cz\n\n'
+              'Aplikace nesbírá ani neodesílá žádné další osobní údaje třetím stranám.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Rozumím'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  void _showFeedbackDialog() {
+    // TODO: Implement feedback
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Zpětná vazba'),
+          content: const Text(
+            'Funkce zpětné vazby bude implementována v příští verzi aplikace. '
+            'Zatím můžete kontaktovat vývojáře na emailu jakubvaclav.flasar@unob.cz',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Rozumím'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+  void _showOpenSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Open Source knihovny'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Tato aplikace používá následující open source knihovny:\n\n'
+              '• Flutter - UI framework\n'
+              '• http - HTTP klient\n'
+              '• crypto - Kryptografické funkce\n'
+              '• flutter_secure_storage - Zabezpečené úložiště\n'
+              '• shared_preferences - Ukládání nastavení\n'
+              '• drift - Databáze ORM\n'
+              '• table_calendar - Kalendářové komponenty\n'
+              '• intl - Internacionalizace\n\n'
+              'Děkujeme všem přispěvatelům těchto projektů!',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Zavřít'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
