@@ -55,10 +55,8 @@ class _TimetablePageState extends State<TimetablePage> {
               setState(() {
                 selectedDate = today;
                 final index = _getIndexFromWeekday(today);
-                pageController.animateToPage(
-                  index,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
+                pageController.jumpToPage(
+                  index
                 );
               });
             },
@@ -396,7 +394,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    _formatClassrooms(event.classroomNames),
+                    formatClassrooms(event.classroomNames),
                     style: TextStyle(color: Colors.grey.shade700),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -411,7 +409,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    _formatTeachers(event.teacherNames),
+                    formatTeachers(event.teacherNames),
                     style: TextStyle(color: Colors.grey.shade700),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -426,32 +424,5 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  String _formatClassrooms(String? classrooms) {
-    if (classrooms == null || classrooms.isEmpty) return 'Neznámá učebna';
-    if (classrooms.startsWith('[') && classrooms.endsWith(']')) {
-      var cleaned = classrooms.substring(1, classrooms.length - 1);
-      cleaned = cleaned.replaceAll('"', '').replaceAll(',', ', ');
-
-      if (cleaned.isEmpty) {
-        return 'Neznámá učebna';
-      }
-      return cleaned;
-    }
-    return classrooms;
-  }
-
-  String _formatTeachers(String? teachers) {
-    if (teachers == null || teachers.isEmpty) return 'Neznámý učitel';
-    if (teachers.startsWith('[') && teachers.endsWith(']')) {
-      var cleaned = teachers.substring(1, teachers.length - 1);
-      cleaned = cleaned.replaceAll('"', '').replaceAll(',', ', ');
-
-      if (cleaned.isEmpty) {
-        return 'Neznámý učitel';
-      }
-      return cleaned;
-    }
-    return teachers;
-  }
 
 }

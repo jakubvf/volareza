@@ -106,3 +106,31 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 }
+
+String formatClassrooms(String? classrooms) {
+  if (classrooms == null || classrooms.isEmpty) return 'Neznámá učebna';
+  if (classrooms.startsWith('[') && classrooms.endsWith(']')) {
+    var cleaned = classrooms.substring(1, classrooms.length - 1);
+    cleaned = cleaned.replaceAll('"', '').replaceAll(',', ', ');
+
+    if (cleaned.isEmpty) {
+      return 'Neznámá učebna';
+    }
+    return cleaned;
+  }
+  return classrooms;
+}
+
+String formatTeachers(String? teachers) {
+  if (teachers == null || teachers.isEmpty) return 'Neznámý učitel';
+  if (teachers.startsWith('[') && teachers.endsWith(']')) {
+    var cleaned = teachers.substring(1, teachers.length - 1);
+    cleaned = cleaned.replaceAll('"', '').replaceAll(',', ', ');
+
+    if (cleaned.isEmpty) {
+      return 'Neznámý učitel';
+    }
+    return cleaned;
+  }
+  return teachers;
+}

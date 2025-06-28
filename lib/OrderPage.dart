@@ -7,7 +7,7 @@ import 'models/meal.dart';
 import 'models/calendar.dart' as cal;
 import 'settings/settings_provider.dart';
 import 'order_page_widgets.dart';
-import 'date_utils.dart';
+import 'czech_date_utils.dart';
 import 'error_handler.dart';
 
 // Type alias for compatibility
