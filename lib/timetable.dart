@@ -1,20 +1,23 @@
-
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'database_provider.dart';
 import 'database.dart';
-import 'database_import.dart';
 import 'event_detail_page.dart';
+import 'database_import.dart';
 
 class TimetablePage extends StatefulWidget {
+  const TimetablePage({Key? key}) : super(key: key);
+
   @override
   _TimetablePageState createState() => _TimetablePageState();
 }
 
 class _TimetablePageState extends State<TimetablePage> {
-  late DateTime selectedDate;
-  late PageController pageController;
+  late final ValueNotifier<List<Event>> _selectedEvents;
+  CalendarFormat _calendarFormat = CalendarFormat.week;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<Event>> _events = {};
   Map<String, List<Event>> eventCache = {};
 
   DateTime _getNearestWeekday(DateTime date) {
@@ -30,34 +33,84 @@ class _TimetablePageState extends State<TimetablePage> {
   @override
   void initState() {
     super.initState();
-    selectedDate = _getNearestWeekday(DateTime.now());
-    pageController = PageController(initialPage: 365);
+    _selectedDay = _getNearestWeekday(DateTime.now());
+    _selectedEvents = ValueNotifier(_getEventsForDay(_selectedDay!));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadEvents();
   }
 
   @override
   void dispose() {
-    pageController.dispose();
+    _selectedEvents.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadEvents() async {
+    final database = DatabaseProvider.of(context);
+    
+    // Only load events for the current week initially for better performance
+    final startOfWeek = _getStartOfWeek(_selectedDay!);
+    final endOfWeek = startOfWeek.add(const Duration(days: 4)); // Monday to Friday
+    
+    final eventsMap = <DateTime, List<Event>>{};
+    
+    for (DateTime date = startOfWeek; date.isBefore(endOfWeek.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+      if (date.weekday <= 5) {
+        try {
+          final dbEvents = await database.eventsOfGroupOnDate('22-5KB', date);
+          if (dbEvents.isNotEmpty) {
+            final dateKey = DateTime(date.year, date.month, date.day);
+            eventsMap[dateKey] = dbEvents;
+            // Also cache with string key for page view
+            final stringKey = '${date.year}-${date.month}-${date.day}';
+            eventCache[stringKey] = dbEvents;
+          }
+        } catch (e) {
+          debugPrint('Error loading events for $date: $e');
+        }
+      }
+    }
+    
+    setState(() {
+      _events = eventsMap;
+      _selectedEvents.value = _getEventsForDay(_selectedDay!);
+    });
+  }
+
+  List<Event> _getEventsForDay(DateTime day) {
+    final dateKey = DateTime(day.year, day.month, day.day);
+    return _events[dateKey] ?? [];
   }
 
   @override
   Widget build(BuildContext context) {
-    final database = DatabaseProvider.of(context);
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Rozvrh hodin'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.calendar_view_month),
+            onPressed: () {
+              setState(() {
+                _calendarFormat = _calendarFormat == CalendarFormat.week 
+                    ? CalendarFormat.month 
+                    : CalendarFormat.week;
+              });
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.today),
             onPressed: () {
               final today = _getNearestWeekday(DateTime.now());
               setState(() {
-                selectedDate = today;
+                _focusedDay = today;
+                _selectedDay = today;
+                _selectedEvents.value = _getEventsForDay(_selectedDay!);
                 final index = _getIndexFromWeekday(today);
-                pageController.jumpToPage(
-                  index
-                );
               });
             },
           ),
@@ -67,6 +120,7 @@ class _TimetablePageState extends State<TimetablePage> {
         children: [
           TextButton(
             onPressed: () async {
+              final database = DatabaseProvider.of(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Načítání databáze...')),
               );
@@ -97,18 +151,96 @@ class _TimetablePageState extends State<TimetablePage> {
             },
             child: const Text('Nahrát databázi'),
           ),
-          _buildWeekDaysRow(),
-          Expanded(
-            child: PageView.builder(
-              controller: pageController,
-              onPageChanged: (index) {
+          _buildCalendarView(),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildCalendarView() {
+    return Expanded(
+      child: Column(
+        children: [
+          TableCalendar<Event>(
+            firstDay: DateTime.utc(2024, 1, 1),
+            lastDay: DateTime.utc(2026, 12, 31),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (day) {
+              return isSameDay(_selectedDay, day);
+            },
+            calendarFormat: _calendarFormat,
+            eventLoader: _getEventsForDay,
+            startingDayOfWeek: StartingDayOfWeek.monday,
+            availableCalendarFormats: const {
+              CalendarFormat.month: 'Týden', // swapped to show the current state, not the next one
+              CalendarFormat.week: 'Měsíc',
+            },
+            calendarStyle: const CalendarStyle(
+              outsideDaysVisible: false,
+              weekendTextStyle: TextStyle(color: Colors.red),
+              holidayTextStyle: TextStyle(color: Colors.red),
+              selectedDecoration: BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+            ),
+            onDaySelected: (selectedDay, focusedDay) {
+              if (!isSameDay(_selectedDay, selectedDay) && selectedDay.weekday <= 5) {
                 setState(() {
-                  selectedDate = _getWeekdayFromIndex(index);
+                  _selectedDay = selectedDay;
+                  _focusedDay = focusedDay;
+                  _selectedEvents.value = _getEventsForDay(selectedDay);
                 });
+              }
+            },
+            onFormatChanged: (format) {
+              if (_calendarFormat != format) {
+                setState(() {
+                  _calendarFormat = format;
+                });
+              }
+            },
+            onPageChanged: (focusedDay) {
+              _focusedDay = focusedDay;
+              _loadEventsForWeek(focusedDay);
+            },
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, day, events) {
+                if (events.isNotEmpty) {
+                  return Positioned(
+                    right: 1,
+                    bottom: 1,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${events.length}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return null;
               },
-              itemBuilder: (context, index) {
-                final date = _getWeekdayFromIndex(index);
-                return _buildTimetableForDate(context, date);
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Expanded(
+            child: ValueListenableBuilder<List<Event>>(
+              valueListenable: _selectedEvents,
+              builder: (context, value, _) {
+                return _buildEventList(value);
               },
             ),
           ),
@@ -117,114 +249,18 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  Widget _buildWeekDaysRow() {
-    final startOfWeek = _getStartOfWeek(selectedDate);
-    final weekDays = List.generate(5, (index) => startOfWeek.add(Duration(days: index)));
-    
-    return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: weekDays.map((day) {
-          final isSelected = isSameDay(day, selectedDate);
-          final isToday = isSameDay(day, DateTime.now());
-          
-          return Expanded(
-            child: InkWell(
-              onTap: () => _selectDate(day),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                    ? Theme.of(context).colorScheme.primary
-                    : (isToday ? Theme.of(context).colorScheme.primaryContainer : null),
-                  borderRadius: BorderRadius.circular(12),
-                  border: isToday && !isSelected 
-                    ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-                    : null,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _getShortWeekday(day.weekday),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isSelected 
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      day.day.toString(),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isSelected 
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   DateTime _getStartOfWeek(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
   }
 
-  String _getShortWeekday(int weekday) {
-    const shortWeekdays = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
-    return shortWeekdays[weekday - 1];
-  }
-
-  DateTime _getWeekdayFromIndex(int index) {
-    // Convert page index to weekday-only dates
-    // Index 365 represents today (if it's a weekday) or the nearest weekday
-    final baseDate = DateTime.now();
-    final weekdayIndex = index - 365;
-    
-    if (weekdayIndex == 0) {
-      return _getNearestWeekday(baseDate);
-    }
-    
-    DateTime result = _getNearestWeekday(baseDate);
-    int daysToAdd = weekdayIndex;
-    
-    while (daysToAdd != 0) {
-      if (daysToAdd > 0) {
-        result = result.add(const Duration(days: 1));
-        if (result.weekday <= 5) { // Monday to Friday
-          daysToAdd--;
-        }
-      } else {
-        result = result.subtract(const Duration(days: 1));
-        if (result.weekday <= 5) { // Monday to Friday
-          daysToAdd++;
-        }
-      }
-    }
-    
-    return result;
-  }
 
   int _getIndexFromWeekday(DateTime date) {
-    // Convert weekday date to page index
     final baseDate = _getNearestWeekday(DateTime.now());
     int index = 365;
     
     if (date.isBefore(baseDate)) {
       DateTime current = baseDate;
-      while (!isSameDay(current, date)) {
+      while (!DateUtils.isSameDay(current, date)) {
         current = current.subtract(const Duration(days: 1));
         if (current.weekday <= 5) {
           index--;
@@ -232,7 +268,7 @@ class _TimetablePageState extends State<TimetablePage> {
       }
     } else if (date.isAfter(baseDate)) {
       DateTime current = baseDate;
-      while (!isSameDay(current, date)) {
+      while (!DateUtils.isSameDay(current, date)) {
         current = current.add(const Duration(days: 1));
         if (current.weekday <= 5) {
           index++;
@@ -241,43 +277,6 @@ class _TimetablePageState extends State<TimetablePage> {
     }
     
     return index;
-  }
-
-  void _selectDate(DateTime date) {
-    setState(() {
-      selectedDate = date;
-      final index = _getIndexFromWeekday(date);
-      pageController.jumpToPage(index);
-    });
-  }
-
-  Widget _buildTimetableForDate(BuildContext context, DateTime date) {
-    final database = DatabaseProvider.of(context);
-    final dateKey = '${date.year}-${date.month}-${date.day}';
-    
-    // If we have cached data, use it immediately
-    if (eventCache.containsKey(dateKey)) {
-      final events = eventCache[dateKey]!;
-      _preloadAdjacentDays(database, date);
-      return _buildEventList(events);
-    }
-    
-    // Otherwise fetch data and cache it
-    return FutureBuilder<List<Event>>(
-      future: database.eventsOfGroupOnDate('22-5KB', date),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Chyba: ${snapshot.error}'));
-        } else {
-          final events = snapshot.data ?? [];
-          eventCache[dateKey] = events;
-          _preloadAdjacentDays(database, date);
-          return _buildEventList(events);
-        }
-      },
-    );
   }
 
   Widget _buildEventList(List<Event> events) {
@@ -290,31 +289,40 @@ class _TimetablePageState extends State<TimetablePage> {
       itemCount: events.length,
       itemBuilder: (context, index) {
         final event = events[index];
-        return _buildEventCard(event);
+        return _buildTimetableEventCard(event);
       },
     );
   }
 
-  void _preloadAdjacentDays(AppDatabase database, DateTime currentDate) async {
-    final adjacentDays = [
-      currentDate.subtract(const Duration(days: 1)),
-      currentDate.add(const Duration(days: 1)),
-    ];
+  Future<void> _loadEventsForWeek(DateTime focusedDay) async {
+    final database = DatabaseProvider.of(context);
+    final startOfWeek = _getStartOfWeek(focusedDay);
+    final endOfWeek = startOfWeek.add(const Duration(days: 4));
     
-    for (final date in adjacentDays) {
-      final dateKey = '${date.year}-${date.month}-${date.day}';
-      if (!eventCache.containsKey(dateKey)) {
+    final eventsMap = <DateTime, List<Event>>{};
+    
+    for (DateTime date = startOfWeek; date.isBefore(endOfWeek.add(const Duration(days: 1))); date = date.add(const Duration(days: 1))) {
+      if (date.weekday <= 5) {
         try {
-          final events = await database.eventsOfGroupOnDate('22-5KB', date);
-          eventCache[dateKey] = events;
+          final dbEvents = await database.eventsOfGroupOnDate('22-5KB', date);
+          if (dbEvents.isNotEmpty) {
+            final dateKey = DateTime(date.year, date.month, date.day);
+            eventsMap[dateKey] = dbEvents;
+            final stringKey = '${date.year}-${date.month}-${date.day}';
+            eventCache[stringKey] = dbEvents;
+          }
         } catch (e) {
-          // Ignore preload errors
+          debugPrint('Error loading events for $date: $e');
         }
       }
     }
+    
+    setState(() {
+      _events.addAll(eventsMap);
+    });
   }
 
-  Widget _buildEventCard(Event event) {
+  Widget _buildTimetableEventCard(Event event) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
       elevation: 2,
@@ -331,98 +339,95 @@ class _TimetablePageState extends State<TimetablePage> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${event.startTime} - ${event.endTime}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                if (event.lessonFormName != null && event.lessonFormName!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      event.lessonFormName!,
-                      style: TextStyle(
+                      '${event.startTime} - ${event.endTime}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
                     ),
                   ),
+                  const Spacer(),
+                  if (event.lessonFormName != null && event.lessonFormName!.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        event.lessonFormName!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              event.subjectName ?? event.subtopic ?? 'Neznámý předmět',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
               ),
-            ),
-            if (event.topic != null && event.topic!.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               Text(
-                event.topic!,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
+                event.subjectName ?? event.subtopic ?? 'Neznámý předmět',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+              if (event.topic != null && event.topic!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  event.topic!,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      formatClassrooms(event.classroomNames),
+                      style: TextStyle(color: Colors.grey.shade700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      formatTeachers(event.teacherNames),
+                      style: TextStyle(color: Colors.grey.shade700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.location_on, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    formatClassrooms(event.classroomNames),
-                    style: TextStyle(color: Colors.grey.shade700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.person, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    formatTeachers(event.teacherNames),
-                    style: TextStyle(color: Colors.grey.shade700),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
-    ),
     );
   }
-
 
 }
