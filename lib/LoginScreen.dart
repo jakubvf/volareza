@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:volareza/MainScreen.dart';
 import 'ApiClient.dart';
 import 'VolarezaService.dart';
+import 'error_handler.dart';
 // import 'package:url_launcher/url_launcher.dart';
 // import 'package:url_launcher/url_launcher_string.dart';
 
@@ -72,8 +73,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 volarezaService: volarezaService,
               )),
         );
+      } on AppError catch (e) {
+        // Handle AppError with user-friendly messages
+        setState(() {
+          _isLoading = false;
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(e.userMessage),
+            duration: const Duration(seconds: 4),
+          ));
+        }
       } on ApiException catch (e) {
-        // Handle API-specific errors
+        // Handle legacy ApiException
         setState(() {
           _isLoading = false;
         });
@@ -83,12 +95,15 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } catch (e) {
         // Handle other unexpected errors
+        final appError = ErrorHandler.handleException(
+          e is Exception ? e : Exception(e.toString()),
+        );
         setState(() {
           _isLoading = false;
         });
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Přihlášení se nezdařilo: ${e.toString()}')));
+              content: Text(appError.userMessage)));
         }
       }
     }

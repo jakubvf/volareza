@@ -8,6 +8,7 @@ import 'models/calendar.dart' as cal;
 import 'settings/settings_provider.dart';
 import 'order_page_widgets.dart';
 import 'date_utils.dart';
+import 'error_handler.dart';
 
 // Type alias for compatibility
 typedef CalendarItem = cal.Day;
@@ -337,18 +338,46 @@ class _OrderPageState extends State<OrderPage> {
   }
 
   void _handleError(dynamic error) {
-    final errorMessage = error.toString();
-    _showErrorSnackBar(errorMessage);
+    String errorMessage;
+    bool canRetry = false;
+    
+    if (error is AppError) {
+      errorMessage = error.userMessage;
+      canRetry = error.canRetry;
+    } else {
+      // Fallback for any remaining non-AppError exceptions
+      final appError = ErrorHandler.handleException(
+        error is Exception ? error : Exception(error.toString()),
+      );
+      errorMessage = appError.userMessage;
+      canRetry = appError.canRetry;
+    }
+    
+    _showErrorSnackBar(errorMessage, canRetry: canRetry);
     setState(() {
       _error = errorMessage;
     });
   }
 
-  void _showErrorSnackBar(String message) {
+  void _showErrorSnackBar(String message, {bool canRetry = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: canRetry ? 5 : 3),
+        action: canRetry
+            ? SnackBarAction(
+                label: 'Zkusit znovu',
+                onPressed: () {
+                  setState(() {
+                    _error = null;
+                  });
+                  _fetchFacilityData();
+                },
+              )
+            : null,
+      ),
     );
   }
 
