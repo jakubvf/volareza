@@ -114,6 +114,9 @@ class _TimetablePageState extends State<TimetablePage> {
               try {
                 await DatabaseImporter.importFromAssets(database);
                 
+                // Refresh the events after successful import
+                await _loadEvents();
+                
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
