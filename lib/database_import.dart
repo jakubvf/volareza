@@ -9,7 +9,7 @@ class DatabaseImporter {
     // Load JSON from assets as bytes to avoid string decompression overhead
     final ByteData data = await rootBundle.load('assets/rozvrh.json');
     final Uint8List bytes = data.buffer.asUint8List();
-    final jsonString = String.fromCharCodes(bytes);
+    final jsonString = utf8.decode(bytes);
     final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
 
     // Clear existing data
