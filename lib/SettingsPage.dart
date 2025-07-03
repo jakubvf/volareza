@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'ApiClient.dart';
-import 'models/facility.dart';
 import 'settings/settings_provider.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -14,9 +12,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
-  String _facilityName = 'Načítám...'; // Initial state while loading
-
-  Facility? _facility;
 
   final List<ColorSeedOption> colorOptions = [
     ColorSeedOption('Tmavě fialová', Color(Colors.deepPurple.toARGB32())),
@@ -28,42 +23,6 @@ class _SettingsPageState extends State<SettingsPage> {
     ColorSeedOption('Žlutá', Color(Colors.yellow.toARGB32())),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _loadFacility();
-  }
-
-  Future<void> _loadFacility() async {
-    try {
-      _facility = await ApiClient.instance.getFacility();
-
-      final settings = SettingsProvider.of(context);
-      
-      // Set default eatery if not set
-      if (settings.defaultEatery == null) {
-        settings.setDefaultEatery(_facility!.eateries.first.id);
-      }
-
-      // Find the default eatery inside preferences
-      final eatery = _facility!.eateries
-          .where((eatery) => eatery.id == settings.defaultEatery)
-          .first;
-
-      if (!mounted) return;
-      setState(() {
-        _facilityName = eatery.name;
-      });
-    } catch (e) {
-      // Handle error appropriately, e.g., show an error message
-      print('Error loading facility: $e');
-
-      if (!mounted) return;
-      setState(() {
-        _facilityName = 'Chyba načítání'; // Display error message
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,58 +33,6 @@ class _SettingsPageState extends State<SettingsPage> {
         body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
-          // Default eatery
-          Card(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Výchozí jídelna',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                description(
-                    'Vyberte jídelnu, kterou používáte nejčastěji. Aplikace si ji zapamatuje a automaticky ji zobrazí jako první, takže nebudete muset pokaždé vybírat ručně.'),
-                ListTile(
-                  title: Text(_facilityName),
-                  leading: const Icon(Icons.restaurant),
-                  onTap: _showDefaultEateryDialog,
-                )
-              ])),
-          Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Víkendové obědy',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                description('Pokud objednáváte obědy i o víkendech, můžete si nechat zobrazit i nabídku na sobotu a neděli.'),
-                Builder(
-                  builder: (context) {
-                    final settings = SettingsProvider.of(context);
-                    return SwitchListTile(
-                      title: settings.showWeekends
-                          ? Text('Zobrazovat')
-                          : Text('Nezobrazovat'),
-                      value: settings.showWeekends,
-                      secondary: const Icon(Icons.calendar_today),
-                      onChanged: (bool value) {
-                        setState(() {
-                          settings.setShowWeekends(value);
-                        });
-                      },
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
           // Appearance
           Card(
             child: Column(
@@ -191,7 +98,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 description(
-                    'Mobilní aplikace pro objednávání obědů v jídelnách Univerzity obrany. Nabízí intuitivní rozhraní pro správu jídelníčku a objednávek přímo z mobilního telefonu.'),
+                    'Mobilní aplikace pro zobrazení rozvrhu hodin na Univerzitě obrany. Nabízí přehledné zobrazení rozvrhu s možností procházení jednotlivých dnů a detailů událostí.'),
                 
                 // App version
                 FutureBuilder<String>(
@@ -361,36 +268,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showDefaultEateryDialog() {
-    final settings = SettingsProvider.of(context);
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Zvolte oblíbenou jídelnu'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: _facility!.eateries.map((eatery) {
-                return RadioListTile<String>(
-                  title: Text(eatery.name),
-                  value: eatery.id,
-                  groupValue: settings.defaultEatery,
-                  onChanged: (String? value) async {
-                    await settings.setDefaultEatery(value!);
-                    setState(() {
-                      _facilityName = eatery.name;
-                    });
-                    if (mounted) Navigator.of(context).pop();
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget description(String text) {
     return Padding(
@@ -434,11 +311,9 @@ class _SettingsPageState extends State<SettingsPage> {
           title: const Text('Ochrana osobních údajů'),
           content: const SingleChildScrollView(
             child: Text(
-              'Vaše přihlašovací údaje jsou uloženy pouze v tomto zařízení pomocí zabezpečeného úložiště. '
-              'Údaje jsou odesílány pouze na oficiální služby:\n\n'
-              '• https://unob.jidelny-vlrz.cz\n'
-              '• https://adfs.unob.cz\n\n'
-              'Aplikace nesbírá ani neodesílá žádné další osobní údaje třetím stranám.',
+              'Tato aplikace nesbírá ani neodesílá žádné osobní údaje. '
+              'Všechna nastavení jsou uložena pouze v tomto zařízení. '
+              'Aplikace používá pouze data rozvrhu, která jsou načítána z lokálních souborů.',
             ),
           ),
           actions: [
@@ -460,8 +335,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return AlertDialog(
           title: const Text('Zpětná vazba'),
           content: const Text(
-            'Funkce zpětné vazby bude implementována v příští verzi aplikace. '
-            'Zatím můžete kontaktovat vývojáře na emailu jakubvaclav.flasar@unob.cz',
+            'Pro zpětnou vazbu nebo návrhy můžete kontaktovat vývojáře na emailu jakubvaclav.flasar@unob.cz',
           ),
           actions: [
             TextButton(
@@ -484,9 +358,6 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Text(
               'Tato aplikace používá následující open source knihovny:\n\n'
               '• Flutter - UI framework\n'
-              '• http - HTTP klient\n'
-              '• crypto - Kryptografické funkce\n'
-              '• flutter_secure_storage - Zabezpečené úložiště\n'
               '• shared_preferences - Ukládání nastavení\n'
               '• drift - Databáze ORM\n'
               '• table_calendar - Kalendářové komponenty\n'

@@ -1,11 +1,11 @@
 {
-    "name": "volareza",
-    "short_name": "volareza",
+    "name": "Moje UO",
+    "short_name": "Moje UO",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Bababuj vlrza jidelna",
+    "description": "Rozvrh hodin Univerzity obrany",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

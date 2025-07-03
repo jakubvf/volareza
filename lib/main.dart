@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'LoginScreen.dart';
+import 'timetable.dart';
 import 'settings/settings_provider.dart';
 import 'database.dart';
 import 'database_provider.dart';
@@ -37,7 +37,7 @@ class _MaterialAppWithSettings extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = SettingsProvider.of(context);
     return MaterialApp(
-      title: 'Volareza',
+      title: 'Moje UO',
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
@@ -49,7 +49,7 @@ class _MaterialAppWithSettings extends StatelessWidget {
         colorSchemeSeed: settings.colorSeed,
       ),
       themeMode: settings.themeMode,
-      home: const LoginScreen(),
+      home: const TimetablePage(),
     );
   }
 }

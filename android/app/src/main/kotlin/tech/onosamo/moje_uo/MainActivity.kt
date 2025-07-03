@@ -1,4 +1,4 @@
-package tech.onosamo.volareza
+package tech.onosamo.moje_uo
 
 import io.flutter.embedding.android.FlutterActivity
 
